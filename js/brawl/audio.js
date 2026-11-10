@@ -38,6 +38,7 @@ export function createBrawlAudio(){
     click(){ tone(1800, 0.03, 'square', 0.1); },
     boom(){ noise(1.1, 'lowpass', 900, 0.7, 1.4, 0, 60); tone(55, 0.9, 'sine', 1, 0, 25); },
     crunch(){ noise(0.3, 'lowpass', 1400, 1, 0.9, 0, 200); noise(0.2, 'bandpass', 400, 3, 0.7, 0.04); tone(70, 0.25, 'sine', 0.8, 0, 35); },
+    gulp(){ for(let k = 0; k < 3; k++) tone(180 - k * 20, 0.09, 'sine', 0.3, k * 0.14, 90); },
     hurt(){ tone(220, 0.15, 'sawtooth', 0.15, 0, 120); },
     rage(){ tone(80, 1.2, 'sawtooth', 0.35, 0, 160); noise(0.8, 'bandpass', 300, 1, 0.5, 0, 1200); },
     bell(){ for(let k = 0; k < 3; k++) tone(660, 0.6, 'triangle', 0.25, k * 0.25); },

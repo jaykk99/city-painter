@@ -2,7 +2,7 @@
 // knockdowns, wall slams, dismemberment and ragdoll corpses; loose items you
 // can pick up, swing and throw; bullets and dynamite.
 import * as THREE from 'three';
-import { V, buildPerson, buildWeaponModel } from './voxel.js';
+import { V, buildPerson, buildWeaponModel, carveVoxels, rebuildPart, PART_OFFSET } from './voxel.js';
 import { wdef, resolveHit, wear, throwDmg } from './weapons.js';
 import { groundAt } from './maps.js';
 
@@ -105,7 +105,9 @@ export class Fighter {
     this.scale = opts.scale || 1; this.boss = !!opts.boss; this.name = opts.name || null;
     const hm = opts.hp || 1;
     const p = buildPerson(outfit);
-    this.group = p.group; this.pivots = p.pivots; this.palette = p.palette; this.outfit = outfit;
+    this.group = p.group; this.pivots = p.pivots; this.palette = p.palette; this.outfit = outfit; this.person = p;
+    this.voxStart = {}; for(const k in p.vox) this.voxStart[k] = p.vox[k].size;
+    this.coward = Math.random() < 0.3; this.fleeT = 0;
     this.group.scale.setScalar(this.scale);
     W.scene.add(this.group);
     this.pos = new THREE.Vector3(x, 0, z); this.vel = new THREE.Vector3();
@@ -186,11 +188,23 @@ export class Fighter {
     this.lastHitBy = attacker || this.lastHitBy;
     if(attacker && !attacker.isPlayer && attacker !== this && Math.random() < 0.7) this.target = attacker;   // grudges start brawls
     else if(attacker && attacker.isPlayer) this.target = attacker;
+    // blocking: a guard soaks most of a normal hit; heavy / charged blows smash through it
+    if(this.alive && this.state === 'block' && attacker){
+      const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+      const facing = (attacker.pos.x - this.pos.x) * fx + (attacker.pos.z - this.pos.z) * fz > 0;
+      if(facing && !(w && (w.heavy || w.charged))){
+        W.audio.clang(); this.hp -= res.dmg * 0.2; this.state = 'stagger'; this.t = 0.25;
+        this.vel.x += dir.x * knock * 0.3; this.vel.z += dir.z * knock * 0.3;
+        if(attacker.isPlayer) W.feed('🛡 BLOCKED');
+        return;
+      }
+      if(facing && attacker.isPlayer) W.feed('💢 GUARD BREAK');
+    }
     const wp = this.partWorld(this.missing[part] ? 'torso' : part, _v2);
-    const pal = this.palette[part] || this.palette.torso;
-    W.fx.burst(wp.x, wp.y, wp.z, Math.max(4, res.gibs >> (res.sever ? 0 : 1)), pal, dir.x, dir.z, 1);
+    W.fx.burst(wp.x, wp.y, wp.z, Math.max(3, (res.gibs >> 1) * W.gore), null, dir.x, dir.z, 1);
     if(Math.random() < 0.6) W.fx.pool(this.pos.x + dir.x * 0.6, this.pos.z + dir.z * 0.6, 0.3 + res.dmg / 80);
-    this.wound(part);
+    const pulped = this.carve(this.missing[part] ? 'torso' : part, dir, res);
+    if(pulped && part !== 'torso' && !this.missing[part]){ res.sever = true; res.crush = true; }
     // limbs carry their own health; the body takes the rest
     const mult = part === 'head' ? 1.7 : part === 'torso' ? 1 : 0.45;
     this.hp -= res.dmg * mult;
@@ -207,6 +221,37 @@ export class Fighter {
       else { this.state = 'stagger'; this.t = 0.28 + knock * 0.03; this.vel.x += dir.x * knock; this.vel.z += dir.z * knock; }
       if(this.weapon && Math.random() < 0.12 * (knock / 4)) this.dropWeapon(true);
     }
+  }
+  // knock voxels out where the blow landed; returns true if the part is mostly gone
+  carve(part, dir, res){
+    if(this.missing[part] || this.gone) return false;
+    const P = this.person, W = this.W;
+    if(!P.owned[part] && !P.voxOwned?.[part]){ P.vox[part] = new Map(P.vox[part]); (P.voxOwned ||= {})[part] = true; }
+    const mesh = this.pivots[part].children[0];
+    // impact point: the side of the part facing the hit, at a random height
+    const c = this.partWorld(part, new THREE.Vector3());
+    const half = (part === 'head' ? 0.2 : part === 'torso' ? 0.13 : 0.1) * this.scale;
+    c.x -= dir.x * half; c.z -= dir.z * half; c.y += (Math.random() - 0.5) * (part === 'head' ? 0.25 : 0.35) * this.scale;
+    mesh.updateMatrixWorld(true);
+    const lp = mesh.worldToLocal(c.clone());
+    const o = PART_OFFSET[part];
+    const cx = lp.x / V - o[0], cy = lp.y / V - o[1], cz = lp.z / V - o[2];
+    const r = Math.min(3.4, (1 + res.dmg / 22) * (res.crush ? 1.5 : 1) * (W.gore > 1 ? 1.2 : 1));
+    const removed = carveVoxels(P.vox[part], cx, cy, cz, r);
+    if(!removed.length) return false;
+    rebuildPart(P, part);
+    // the knocked-out voxels fly off as gibs
+    const tmp = new THREE.Vector3(), n = Math.min(removed.length, Math.round(28 * W.gore));
+    for(let i = 0; i < n; i++){
+      const [x, y, z, col] = removed[i];
+      tmp.set((x + 0.5 + o[0]) * V, (y + 0.5 + o[1]) * V, (z + 0.5 + o[2]) * V); mesh.localToWorld(tmp);
+      const sp = 1.5 + Math.random() * 3;
+      W.fx.gib(tmp.x, tmp.y, tmp.z, dir.x * sp + (Math.random() - 0.5) * 2, 1 + Math.random() * 3, dir.z * sp + (Math.random() - 0.5) * 2, col, false);
+    }
+    const left = P.vox[part].size / this.voxStart[part];
+    if(part === 'head' && left < 0.45 && this.alive){ this.sever('head', dir, true); return true; }
+    if(part === 'torso' && left < 0.4){ if(this.alive){ this.hp = 0; this.die(dir, true, this.lastHitBy); } else this.obliterate(dir); return true; }
+    return left < 0.35;
   }
   wound(part){
     if(this.wounds > 40 || this.missing[part]) return;
@@ -328,14 +373,25 @@ export class Fighter {
             this.goal = best;
           }
         }
-        if(this.state === 'stagger'){ if(this.t <= 0) this.state = 'idle'; }
+        // cowards run when badly hurt; some fighters put their guard up when you wind up
+        if(this.coward && !this.boss && this.hp < this.maxHp * 0.3 && this.fleeT <= 0 && !this.fled){ this.fled = true; this.fleeT = 3 + Math.random() * 3; if(Math.random() < 0.5) this.dropWeapon(true); }
+        if(this.fleeT > 0){ this.fleeT -= dt; }
+        if(this.state === 'block'){ this.t -= 0; if(this.t <= 0) this.state = 'idle'; }
+        else if(this.state === 'idle' && W.playerThreat && this.target === W.player && !this.boss && Math.random() < dt * 1.5){
+          const d = this.pos.distanceTo(W.player.pos);
+          if(d < 3 && !this.missing.armL && !this.missing.armR){ this.state = 'block'; this.t = 0.6 + Math.random() * 0.5; }
+        }
+        if(this.state === 'stagger' || this.state === 'block'){ if(this.t <= 0) this.state = 'idle'; }
         else if(this.state === 'windup'){
           this.faceTarget(dt, 10);
           if(this.t <= 0) this.strike();
         } else if(this.state === 'recover'){ if(this.t <= 0) this.state = 'idle'; }
         else {
           const tg = this.goal && this.goal.alive && !this.goal.held ? this.goal : this.target;
-          if(tg){
+          if(this.fleeT > 0 && tg){
+            const ax = this.pos.x - tg.pos.x, az = this.pos.z - tg.pos.z, ad = Math.hypot(ax, az) || 1;
+            wantX = ax / ad * 1.3; wantZ = az / ad * 1.3; this.yaw = Math.atan2(wantX, wantZ);
+          } else if(tg){
             const tx = tg.pos.x - this.pos.x, tz = tg.pos.z - this.pos.z, d = Math.hypot(tx, tz) || 1;
             const w = this.w, armed = this.weapon && !this.missing.armR;
             if(tg === this.goal){
@@ -375,7 +431,7 @@ export class Fighter {
     if(slam && preSpeed > 6 && (this.state === 'down' || this.corpse)){
       W.fx.splat(slam.x, this.pos.y + 1 + Math.random() * 0.6, slam.z, slam.nx, 0, slam.nz, 0.5 + preSpeed * 0.06);
       W.audio.thud(0.8);
-      if(this.alive){ const res = { dmg:Math.round(preSpeed * 2.2), sever:false, crush:false, gibs:8 }; this.takeHit('torso', res, _v.set(-slam.nx, 0, -slam.nz), 0, this.lastHitBy, null); }
+      if(this.alive){ const res = { dmg:Math.round(preSpeed * 2.2), sever:false, crush:false, gibs:8 }; W.ctx = { slam:true }; this.takeHit('torso', res, _v.set(-slam.nx, 0, -slam.nz), 0, this.lastHitBy, null); W.ctx = null; }
       this.vel.x *= 0.3; this.vel.z *= 0.3;
     }
     const g = groundAt(W.L, this.pos.x, this.pos.z, this.pos.y + 0.3);
@@ -472,6 +528,9 @@ export class Fighter {
     }
     this.danceY = dance;
     if(!this.missing.armR) P.armR.rotation.x = ar;
+    if(this.state === 'block' && this.alive){ if(!this.missing.armR) P.armR.rotation.set(-1.9, 0, -0.5); if(!this.missing.armL) P.armL.rotation.set(-1.9, 0, 0.5); }
+    else { if(!this.missing.armR) P.armR.rotation.z = 0; if(!this.missing.armL) P.armL.rotation.z = 0; }
+    if(this.fleeT > 0 && this.alive && !this.missing.armL){ P.armL.rotation.x = -2.8; if(!this.missing.armR) P.armR.rotation.x = -2.8; }   // hands up, running
     P.torso.rotation.x = this.state === 'stagger' ? -0.3 : this.state === 'windup' ? -0.15 : 0;
     P.head.rotation.x = P.torso.rotation.x;
     // crawling: drop the upper body to the floor

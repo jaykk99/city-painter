@@ -16,14 +16,22 @@ First-person voxel bar brawler for phone and PC, in the style of *Paint the Town
 Like the real game, every bar starts **calm**: people drink, dance and play pool, and someone's on the jukebox / DJ booth / piano. Nobody touches you until you throw the first punch (or fire a shot, or light dynamite). Then everyone nearby piles in, the brawl spreads across the room, more people pour in through the doors, and if you hit whoever's running the music, the music stops. The Arena is the exception: waves come in swinging.
 
 ## Gore physics
-Everyone is made of voxels and comes apart. Blades sever arms, legs and heads (rigid debris that tumbles and bounces); sledgehammers, the anchor and dynamite pulp bodies into cubes; blood splats floors and walls; corpses ragdoll and can be mutilated; kicked bodies fly, slam walls and bowl people over.
+Everyone is made of voxels and comes apart. **Every hit knocks real voxels out** — punches dent faces, bats cave in skulls, the crater's rim turns red, and a body part carved down far enough falls off or bursts. Blades sever arms, legs and heads (rigid debris that tumbles and bounces); sledgehammers, the anchor and dynamite pulp bodies into cubes; blood splats floors and walls; corpses ragdoll and can be mutilated; kicked bodies fly, slam walls and bowl people over.
 
 ## 39 weapons
 Bottles (break into broken bottles), mugs, pool cues, stools, chairs, stool legs, bats, spiked bats, frying pan, knife, shiv, cleaver, machete, fire axe, sledgehammer, crowbar, pipe wrench, bike chain, guitar, mic stand, katana, cutlass, spear, pitchfork, shovel, weight plate, dumbbell, guard baton, anchor, brass knuckles · revolver, double barrel, flintlock, lever rifle, tommy gun · dynamite, throwing knives, cannonball. Anything can be thrown.
 
+## Fighting
+- **Power hits:** hold attack to wind up — more damage, more knockback, cuts deeper, smashes through guards
+- **Parry:** tap block just before a hit lands — no damage, the attacker reels and may drop their weapon
+- **Enemies** put their guard up when you wind up, and cowards run when they're hurt
+- **Drink** a bottle or mug you're holding (H / 🍺) for +25 health
+- **Score & combos:** chain kills for DOUBLE KILL → TRIPLE KILL → MASSACRE → BLOODBATH → PAINTED RED; bonuses for heads off, obliterations, thrown kills, wall splats, power hits and bosses. Best score per map is saved
+- **Settings:** look speed, field of view, gore (low / normal / insane), graphics (fast / pretty)
+
 ## Controls
 - **Phone:** left thumb = move, drag right side = look, buttons: 👊 attack (hold to keep swinging) · 🛡️ block · 🦵 kick · ✋ grab · 🎯 throw · ⤴ jump · 🔥 rage
-- **PC:** WASD · mouse look · LMB attack · RMB block · F kick · E grab · Q throw · Space jump · Shift sprint · R rage · Esc pause
+- **PC:** WASD · mouse look · LMB attack (hold = power hit) · RMB block (tap = parry) · H drink · F kick · E grab · Q throw · Space jump · Shift sprint · R rage · Esc pause
 
 Kills fill the RAGE bar: 7 s of super-strength where every hit takes something off. Cash you earn is added to your City Driver wallet (same `jaykk99.github.io` origin).
 

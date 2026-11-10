@@ -12,6 +12,8 @@
   <div id="game"></div>
   <div id="rage-tint"></div>
   <div id="flash"></div>
+  <div id="vignette"></div>
+  <div id="screen-blood"></div>
 
   <div id="hud" class="hidden">
     <div id="crosshair"></div>
@@ -20,6 +22,7 @@
       <div class="bar rage"><span>🔥</span><div class="track"><div id="rage-fill"></div></div></div>
     </div>
     <div id="count">—</div>
+    <div id="score-box"><b id="score">0</b><span id="combo" class="hidden"></span></div>
     <div id="weapon"><b id="weapon-name">FISTS</b><small id="weapon-info"></small></div>
     <div id="hint" class="hidden"></div>
     <div id="announce"></div>
@@ -37,6 +40,7 @@
     <div class="tbtn" id="b-throw">🎯</div>
     <div class="tbtn" id="b-jump">⤴</div>
     <div class="tbtn hidden" id="b-rage">🔥</div>
+    <div class="tbtn hidden" id="b-drink">🍺</div>
   </div>
 
   <div id="menu" class="overlay">
@@ -44,16 +48,27 @@
     <p class="sub">PAINT THE TOWN RED · FIRST-PERSON VOXEL BRAWLER</p>
     <div id="scen-list"></div>
     <div class="row">
-      <a class="mbtn" href="https://jaykk99.github.io/city-driver/">🚗 BACK TO CITY DRIVER</a>
+      <button class="mbtn" id="m-settings">⚙ SETTINGS</button>
+      <a class="mbtn" href="https://jaykk99.github.io/city-driver/">🚗 PLAY CITY DRIVER</a>
     </div>
-    <p class="keys">PC: WASD move · mouse look · LMB attack · RMB block · F kick · E grab · Q throw · Space jump · R rage<br>Phone: left thumb moves, drag right side to look, buttons to fight</p>
+    <p class="keys">PC: WASD move · mouse look · LMB attack (hold = power hit) · RMB block (tap right before a hit = parry) · F kick · E grab · Q throw · H drink · Space jump · R rage<br>Phone: left thumb moves, drag right side to look · hold 👊 for a power hit · tap 🛡️ just before a hit to parry</p>
   </div>
 
   <div id="pause" class="overlay hidden">
     <h2>PAUSED</h2>
     <button class="mbtn primary" id="p-resume">▶ RESUME</button>
     <button class="mbtn" id="p-restart">↻ RESTART</button>
+    <button class="mbtn" id="p-settings">⚙ SETTINGS</button>
     <button class="mbtn" id="p-menu">🍺 PICK A BAR</button>
+  </div>
+
+  <div id="settings" class="overlay hidden">
+    <h2>SETTINGS</h2>
+    <label class="set">LOOK SPEED <input type="range" id="s-sens" min="0.3" max="2.5" step="0.1"><span id="s-sens-v"></span></label>
+    <label class="set">FIELD OF VIEW <input type="range" id="s-fov" min="65" max="105" step="1"><span id="s-fov-v"></span></label>
+    <div class="set">GORE <span class="seg" id="s-gore"><button data-v="0.4">LOW</button><button data-v="1">NORMAL</button><button data-v="2">INSANE</button></span></div>
+    <div class="set">GRAPHICS <span class="seg" id="s-qual"><button data-v="0">FAST</button><button data-v="1">PRETTY</button></span></div>
+    <button class="mbtn primary" id="s-close">✔ DONE</button>
   </div>
 
   <div id="result" class="overlay hidden">

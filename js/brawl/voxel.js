@@ -114,8 +114,36 @@ export const BODY_MAT = new THREE.MeshLambertMaterial({ vertexColors:true });
 
 // Build a voxel person. Returns { group, parts, pivots, palette }.
 // group origin = feet centre, faces +z. Parts: head torso armL armR legL legR.
+export const PART_OFFSET = { head:[-3, 0, -3], torso:[-4, 0, -2], armL:[-1.5, -9, -1.5], armR:[-1.5, -9, -1.5], legL:[-2, -10, -2], legR:[-2, -10, -2] };
+const voxCache = new Map();
+function cachedVox(key, make){ let v = voxCache.get(key); if(!v){ v = make(); voxCache.set(key, v); } return v; }
+
+// Paint the Town Red style damage: knock voxels out of a part around (cx,cy,cz)
+// (voxel coords), and stain the newly exposed rim red. Pure Map in, list out.
+const FLESH = [0x8a0a0a, 0xa01010, 0x700606];
+export function carveVoxels(vox, cx, cy, cz, r, rng = Math.random){
+  const removed = [], r2 = r * r, rim = (r + 1.3) * (r + 1.3);
+  for(const [key, c] of vox){
+    const [x, y, z] = key.split(',').map(Number);
+    const d2 = (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 + (z + 0.5 - cz) ** 2;
+    if(d2 <= r2 * (0.75 + rng() * 0.5)){ removed.push([x, y, z, c]); vox.delete(key); }
+  }
+  if(removed.length){
+    for(const [key] of vox){
+      const [x, y, z] = key.split(',').map(Number);
+      const d2 = (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 + (z + 0.5 - cz) ** 2;
+      if(d2 <= rim && rng() < 0.85) vox.set(key, FLESH[(rng() * 3) | 0]);
+    }
+  }
+  return removed;
+}
+
 export function buildPerson(o){
   const key = JSON.stringify(o);
+  const src = {
+    head: cachedVox(key + 'H', () => headVox(o)), torso: cachedVox(key + 'T', () => torsoVox(o)),
+    arm: cachedVox(key + 'A', () => armVox(o)), leg: cachedVox(key + 'L', () => legVox(o)),
+  };
   const geo = {
     head:  cached(key + 'h', () => voxelGeometry(headVox(o), -3, 0, -3)),
     torso: cached(key + 't', () => voxelGeometry(torsoVox(o), -4, 0, -2)),
@@ -138,7 +166,17 @@ export function buildPerson(o){
     armL:[o.skin, o.shirt ?? o.skin], armR:[o.skin, o.shirt ?? o.skin],
     legL:[o.pants, o.pants, o.shoe], legR:[o.pants, o.pants, o.shoe],
   };
-  return { group, pivots, palette };
+  // each person gets their own copy of the voxels so hits can dig into them
+  const vox = { head:src.head, torso:src.torso, armL:src.arm, armR:src.arm, legL:src.leg, legR:src.leg };
+  return { group, pivots, palette, vox, owned:{} };
+}
+// rebuild one part's mesh after carving
+export function rebuildPart(person, part){
+  const mesh = person.pivots[part].children[0];
+  const o = PART_OFFSET[part];
+  const g = voxelGeometry(person.vox[part], o[0], o[1], o[2]);
+  if(person.owned[part]) mesh.geometry.dispose();
+  mesh.geometry = g; person.owned[part] = true;
 }
 
 // ---------- first-person hands ----------

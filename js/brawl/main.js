@@ -15,16 +15,18 @@ import { createBrawlAudio } from './audio.js';
 const $ = id => document.getElementById(id);
 const TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
 if(TOUCH) document.body.classList.add('touch');
-const SAVE_KEY = 'citydriver_save_v1', BEST_KEY = 'citydriver_brawl_best';
+const SAVE_KEY = 'citydriver_save_v1', BEST_KEY = 'citydriver_brawl_best', SET_KEY = 'citypainter_settings';
+const settings = Object.assign({ sens:1, fov:78, gore:1, quality:TOUCH ? 0 : 1 }, (() => { try{ return JSON.parse(localStorage.getItem(SET_KEY)) || {}; }catch(e){ return {}; } })());
+function saveSettings(){ try{ localStorage.setItem(SET_KEY, JSON.stringify(settings)); }catch(e){} }
 const EYE = 1.62, P_RADIUS = 0.34;
 
 // ---------------- renderer ----------------
 const renderer = new THREE.WebGLRenderer({ antialias:!TOUCH, powerPreference:'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, TOUCH ? 1.25 : 1.75));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, settings.quality ? (TOUCH ? 1.5 : 1.75) : 1));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 $('game').appendChild(renderer.domElement);
-const camera = new THREE.PerspectiveCamera(78, 16 / 9, 0.05, 120);
+const camera = new THREE.PerspectiveCamera(settings.fov, 16 / 9, 0.05, 120);
 let scene = null;
 const orient = initOrientation((w, h) => { renderer.setSize(w, h, false); renderer.domElement.style.width = w + 'px'; renderer.domElement.style.height = h + 'px'; camera.aspect = w / h; camera.updateProjectionMatrix(); });
 orient.refresh();
@@ -42,12 +44,13 @@ const input = { mx:0, my:0, attack:false, attackHeld:false, block:false, kick:fa
 function newWorld(id){
   const L = getScenario(id);
   scene = new THREE.Scene();
-  room = buildRoom(scene, L, TOUCH ? 0 : 1);
+  room = buildRoom(scene, L, settings.quality); renderer.shadowMap.enabled = !!settings.quality;
   scene.add(camera);
-  const fx = createFX(scene, L);
+  const fx = createFX(scene, L); fx.gore = settings.gore;
   W = {
     L, scene, fx, audio, player, fighters:[], items:[], rage:false,
-    stats:{ kills:0, limbs:0, heads:0, exploded:0, t:0, wave:0, spawned:0 },
+    stats:{ kills:0, limbs:0, heads:0, exploded:0, t:0, wave:0, spawned:0, score:0, bestCombo:0, parries:0 },
+    gore:settings.gore, playerThreat:false, ctx:null, combo:{ n:0, t:9 }, feed,
     woundGeo:new THREE.BoxGeometry(V * 1.05, V * 1.05, V * 1.05), stumpGeo:new THREE.BoxGeometry(V * 3.2, V * 1.2, V * 3.2),
     woundMat:new THREE.MeshLambertMaterial({ color:0x9a0808 }),
     spawnPts:spawnPoints(L, 18), spawnT:1.2, bossSpawned:false, boss:null, done:false, hitstop:0, shake:0,
@@ -141,7 +144,9 @@ function hit(f, part, w, dir, attacker, opts = {}){
   const knock = (opts.knock ?? w.knock ?? 3) * (mine && player.raging ? 2 : 1);
   W.rage = mine && player.raging > 0;
   const wasAlive = f.alive;
+  if(mine) W.ctx = Object.assign(W.ctx || {}, { thrown:!!opts.thrown, charged:!!w.charged, part, gun:w.kind === 'gun' });
   f.takeHit(part, res, dir, knock, attacker, w);
+  if(mine){ W.ctx = null; if(f.pos.distanceTo(player.pos) < 1.9 && (res.sever || !f.alive)) screenBlood(res.crush ? 7 : 3); }
   W.rage = false;
   if(w.sharp || w.kind === 'gun') audio.slash(); else audio.thud(w.heavy ? 1.2 : 0.8);
   if(res.sever || res.crush) audio.squish();
@@ -156,6 +161,13 @@ function hurtPlayer(dmg, dir, knock, attacker){
   if(!player.alive || W.done) return;
   const fwdx = Math.sin(player.yaw + Math.PI), fwdz = Math.cos(player.yaw + Math.PI);
   const facing = -(dir.x * fwdx + dir.z * fwdz) > 0.2;
+  if(player.block && facing && player.blockT < 0.25 && attacker && !attacker.isPlayer && attacker.alive){
+    // perfect timing: parry — no damage, attacker reels and may lose their weapon
+    audio.clang(); audio.clang(); W.shake = 0.15; W.hitstop = 0.12;
+    attacker.state = 'stagger'; attacker.t = 1.2; attacker.cool = 1.5;
+    if(attacker.weapon && Math.random() < 0.4) attacker.dropWeapon(true);
+    W.stats.parries++; addScore(75, 'PARRY'); return;
+  }
   if(player.block && facing){ dmg *= 0.18; knock *= 0.35; audio.clang(); W.shake = 0.1; }
   else { audio.thud(0.7); audio.hurt(); W.shake = 0.22; flash(0.5 + dmg / 60); }
   if(player.raging) dmg *= 0.5;
@@ -240,12 +252,30 @@ function explode(pos, R, dmg, owner){
   fx.nudge(pos.x, pos.z, R, 0, 0);
 }
 function explodeCorpse(f, dir){ f.obliterate(dir); }
+const COMBO = ['', '', 'DOUBLE KILL', 'TRIPLE KILL', 'MASSACRE', 'BLOODBATH', 'PAINTED RED'];
+function addScore(pts, label){
+  W.stats.score += Math.round(pts);
+  if(label) feed('+' + Math.round(pts) + ' ' + label);
+}
 function onKill(f, killer, exploded){
+  const ctx = W.ctx || {};
   if(killer === player){
     W.stats.kills++;
+    const c = W.combo; c.n = c.t < 3.5 ? c.n + 1 : 1; c.t = 0;
+    W.stats.bestCombo = Math.max(W.stats.bestCombo, c.n);
+    let pts = 100, tags = [];
+    if(f.missing.head){ pts += 150; tags.push('HEADS OFF'); }
+    if(exploded){ pts += 200; tags.push('OBLITERATED'); }
+    if(ctx.thrown){ pts += 150; tags.push('THROWN'); }
+    if(ctx.slam){ pts += 150; tags.push('WALL SPLAT'); }
+    if(ctx.charged){ pts += 75; tags.push('POWER'); }
+    if(player.raging){ pts += 50; }
+    if(f.boss){ pts += 1000; tags.push('BOSS'); }
+    pts *= c.n;
+    addScore(pts, tags.join(' · ') || 'KILL');
+    if(c.n >= 2) announce(COMBO[Math.min(c.n, COMBO.length - 1)] + (c.n > 6 ? ' ×' + c.n : ''), 1.2);
     player.rage = Math.min(1, player.rage + (f.boss ? 0.5 : 0.18));
-    if(exploded){ W.stats.exploded++; feed('💥 OBLITERATED'); }
-    else feed('☠ ' + (f.name || 'KO'));
+    if(exploded) W.stats.exploded++;
   } else if(killer) feed('🍺 brawler down');
   if(f.boss){ announce(f.name + ' IS DOWN', 1.6); audio.bell(); }
 }
@@ -267,8 +297,8 @@ function meleeTarget(reach){
   }
   return best;
 }
-function doMelee(){
-  const w = wdef(player.weapon);
+function doMelee(wo){
+  const w = wo || wdef(player.weapon);
   const tg = meleeTarget(w.reach);
   if(!tg){ audio.whoosh(); return; }
   const f = tg.f, d = tg.d;
@@ -287,9 +317,9 @@ function doMelee(){
     }
   }
 }
-function attack(){
+function attack(charge = 0){
   if(player.cool > 0 || player.block || !player.alive) return;
-  const w = wdef(player.weapon);
+  let w = wdef(player.weapon);
   if(w.kind === 'gun'){
     if((player.wstate.ammo ?? 0) <= 0){ audio.click(); player.cool = 0.3; hintOnce('Out of ammo — throw it (Q)'); return; }
     player.cool = w.rate; player.wstate.ammo--;
@@ -300,9 +330,14 @@ function attack(){
     return;
   }
   if(w.kind === 'throw'){ throwHeld(); return; }
-  player.cool = w.rate * (player.raging ? 0.7 : 1);
-  vm.swing = 1; vm.swingDur = Math.max(0.22, w.rate * 0.8); vm.side = player.weapon ? 1 : (player.punchSide ^= 1);
-  player.pending = { t:Math.min(0.14, w.rate * 0.35), fn:doMelee };
+  // held attack = power blow: more damage, more knockback, cuts deeper, smashes guards
+  const k = Math.min(1, charge / 0.6);
+  const heavy = charge >= 0.3;
+  player.cool = w.rate * (player.raging ? 0.7 : 1) * (heavy ? 1.3 : 1);
+  vm.swing = 1; vm.swingDur = Math.max(0.22, w.rate * 0.8) * (heavy ? 0.8 : 1); vm.side = player.weapon ? 1 : (player.punchSide ^= 1); vm.heavy = heavy;
+  const ww = heavy ? Object.assign({}, w, { dmg:w.dmg * (1.5 + k * 0.9), knock:(w.knock || 3) * (1.4 + k * 0.8) + 2, sever:Math.min(1, (w.sever || 0) + 0.3 * k), charged:true }) : w;
+  if(heavy){ audio.whoosh(); W.shake = Math.max(W.shake, 0.08); }
+  player.pending = { t:Math.min(0.14, w.rate * 0.35) * (heavy ? 0.6 : 1), fn:() => doMelee(ww) };
 }
 function kick(){
   if(player.kickCool > 0 || !player.alive) return;
@@ -352,6 +387,12 @@ function grab(){
 function dropHeld(){
   const it = new Item(W, player.weapon, player.pos.x - Math.sin(player.yaw) * 0.5, 1, player.pos.z - Math.cos(player.yaw) * 0.5, player.wstate);
   W.items.push(it); setHeld(null);
+}
+function drink(){
+  const w = wdef(player.weapon);
+  if(!(player.weapon === 'bottle' || player.weapon === 'mug') || player.wstate.drunk || !player.alive) return;
+  player.wstate.drunk = true; player.hp = Math.min(100, player.hp + 25); vm.drink = 1;
+  audio.gulp(); feed('🍺 +25 health'); W.wobble = 2.5;
 }
 function playerDie(killer){
   player.alive = false; announce('YOU GOT PAINTED', 2.5);
@@ -406,6 +447,12 @@ function updateViewmodel(dt, moving){
       if(vm.side){ rz -= p * 0.45; rx -= p * 0.15; ry += p * 0.12; } else { lz -= p * 0.45; lx += p * 0.15; ly += p * 0.12; }
     }
   }
+  if(player.charge != null){
+    const k = Math.min(1, player.charge / 0.6), sh = k >= 1 ? (Math.random() - 0.5) * 0.01 : 0;
+    if(player.weapon){ rx = 0.32 + sh; ry = -0.16 + k * 0.06 + sh; rz = -0.5 + k * 0.04; rrx = 0.7 + k * 0.5; rrz = -0.6; }
+    else { rz = -0.42 + k * 0.14; ry = -0.24; rx = 0.3 + sh; lz = -0.5; }
+  }
+  if(vm.drink > 0){ vm.drink = Math.max(0, vm.drink - dt * 1.2); const p = Math.sin((1 - vm.drink) * Math.PI); rx = 0.26 - p * 0.24; ry = -0.27 + p * 0.22; rz = -0.5 + p * 0.25; rrx = p * 1.9; }
   if(vm.recoil > 0){ vm.recoil = Math.max(0, vm.recoil - dt * 6); rz += vm.recoil * 0.08; rrx += vm.recoil * 0.35; }
   vm.hR.position.set(rx, ry, rz); vm.hR.rotation.set(rrx, 0, rrz);
   vm.hL.position.set(lx, ly, lz); vm.hL.rotation.set(lrx, 0, 0);
@@ -421,9 +468,23 @@ function updateViewmodel(dt, moving){
 let annT = 0;
 function announce(txt, dur = 1.1){ if(!txt) return; const a = $('announce'); a.textContent = txt; a.classList.add('on'); annT = dur; }
 function feed(txt){ const f = $('feed'); const d = document.createElement('div'); d.textContent = txt; f.prepend(d); while(f.children.length > 5) f.lastChild.remove(); setTimeout(() => d.remove(), 2600); }
+function screenBlood(n){
+  if(settings.gore < 1) return;
+  const box = $('screen-blood');
+  for(let i = 0; i < n; i++){
+    const d = document.createElement('i'), sz = 40 + Math.random() * 140;
+    d.style.cssText = `left:${Math.random() * 100}%;top:${Math.random() * 100}%;width:${sz}px;height:${sz * (0.6 + Math.random() * 0.8)}px;transform:translate(-50%,-50%) rotate(${Math.random() * 360}deg)`;
+    box.appendChild(d); setTimeout(() => d.classList.add('fade'), 60); setTimeout(() => d.remove(), 3200);
+  }
+  while(box.children.length > 30) box.firstChild.remove();
+}
 let flashV = 0; function flash(v){ flashV = Math.min(1, flashV + v); }
 const hinted = new Set(); function hintOnce(t){ if(hinted.has(t)) return; hinted.add(t); feed(t); }
 function updateHUD(){
+  $('score').textContent = W.stats.score.toLocaleString();
+  const cb = $('combo'); if(W.combo.n >= 2 && W.combo.t < 3.5){ cb.textContent = '×' + W.combo.n + ' COMBO'; cb.classList.remove('hidden'); cb.style.opacity = (1 - W.combo.t / 3.5).toFixed(2); } else cb.classList.add('hidden');
+  const ch = $('crosshair'); if(player.charge != null){ const k = Math.min(1, player.charge / 0.6); ch.style.boxShadow = `0 0 0 ${2 + k * 9}px rgba(255,${(1 - k) * 200 | 0},40,${0.35 + k * 0.5})`; } else ch.style.boxShadow = '';
+  $('b-drink').classList.toggle('hidden', !((player.weapon === 'bottle' || player.weapon === 'mug') && !player.wstate.drunk));
   $('hp-fill').style.width = player.hp + '%';
   $('rage-fill').style.width = (player.raging > 0 ? player.raging / 7 : player.rage) * 100 + '%';
   document.querySelector('.bar.rage').classList.toggle('full', player.rage >= 1 && !player.raging);
@@ -453,6 +514,8 @@ function frame(now){
   if(paused){ renderer.render(scene, camera); return; }
   if(W.hitstop > 0){ W.hitstop -= dt; dt *= 0.15; }
   W.stats.t += dt;
+  W.combo.t += dt;
+  if(W.wobble > 0) W.wobble = Math.max(0, W.wobble - dt);
   stepPlayer(dt);
   // spawning
   const L = W.L;
@@ -489,7 +552,10 @@ function frame(now){
   W.shake = Math.max(0, W.shake - dt * 1.8);
   const sh = W.shake * W.shake * 0.25;
   camera.position.set(player.pos.x + (Math.random() - 0.5) * sh, player.pos.y + (player.alive ? EYE : 0.35), player.pos.z + (Math.random() - 0.5) * sh);
-  camera.rotation.set(player.pitch + (Math.random() - 0.5) * sh, player.yaw, player.alive ? 0 : 0.9, 'YXZ');
+  const wob = W.wobble ? Math.sin(W.stats.t * 2.2) * 0.04 * W.wobble : 0;
+  const strafe = (keys.KeyD ? -1 : 0) + (keys.KeyA ? 1 : 0) - stick.x;
+  vm.tilt = (vm.tilt || 0) + (strafe * 0.02 - (vm.tilt || 0)) * Math.min(1, dt * 8);
+  camera.rotation.set(player.pitch + (Math.random() - 0.5) * sh, player.yaw + wob * 0.5, (player.alive ? 0 : 0.9) + vm.tilt + wob, 'YXZ');
   updateViewmodel(dt, Math.hypot(player.vel.x, player.vel.z) > 0.5);
   vm.root.visible = player.alive;
   flashV = Math.max(0, flashV - dt * 1.5); $('flash').style.opacity = flashV.toFixed(2);
@@ -504,15 +570,29 @@ function stepPlayer(dt){
   if(player.raging > 0){ player.raging -= dt; if(player.raging <= 0){ player.raging = 0; feed('🔥 rage over'); } }
   if(!player.alive){ player.vel.multiplyScalar(0.9); return; }
   // look
-  const sens = TOUCH ? 0.0055 : 0.0024;
+  const sens = (TOUCH ? 0.0055 : 0.0024) * settings.sens;
   player.yaw -= input.mx * sens; player.pitch -= input.my * sens; input.mx = input.my = 0;
   player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch));
+  const wasBlock = player.block;
   player.block = input.block;
+  if(player.block && !wasBlock) player.blockT = 0;
   // actions
-  // tap to swing; hold to keep swinging / firing
-  if(input.attack || input.attackHeld) attack();
+  const wk = wdef(player.weapon).kind;
+  if(wk === 'melee'){
+    if(input.attack && player.charge == null) player.charge = 0;
+    if(player.charge != null){
+      if(input.attackHeld){ player.charge += dt; }
+      else { const c = player.charge; player.charge = null; attack(c); }
+    }
+  } else {
+    player.charge = null;
+    if(input.attack || (input.attackHeld && (player.weapon === 'tommy' || player.weapon === 'revolver'))) attack();
+  }
   input.attack = false;
+  W.playerThreat = player.charge != null && player.charge > 0.12;
+  player.blockT = (player.blockT ?? 9) + dt;
   if(input.kick){ input.kick = false; kick(); }
+  if(input.drink){ input.drink = false; drink(); }
   if(input.grab){ input.grab = false; grab(); }
   if(input.throw){ input.throw = false; throwHeld(); }
   if(input.rage){ input.rage = false; if(player.rage >= 1 && !player.raging){ player.raging = 7; player.rage = 0; announce('RAGE', 1.2); audio.rage(); } }
@@ -575,6 +655,7 @@ window.addEventListener('keydown', e => {
   if(e.code === 'KeyE') input.grab = true;
   if(e.code === 'KeyQ' || e.code === 'KeyG') input.throw = true;
   if(e.code === 'KeyR') input.rage = true;
+  if(e.code === 'KeyH' || e.code === 'KeyC') input.drink = true;
   if(e.code === 'Escape' || e.code === 'KeyP') togglePause();
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
@@ -614,6 +695,7 @@ function bindTouch(){
   btn('b-throw', () => { input.throw = true; });
   btn('b-jump', () => { input.jump = true; });
   btn('b-rage', () => { input.rage = true; });
+  btn('b-drink', () => { input.drink = true; });
 }
 bindTouch();
 
@@ -626,7 +708,7 @@ function buildMenu(){
     const L = f();
     const el = document.createElement('button'); el.className = 'scen';
     const rec = b[L.id];
-    el.innerHTML = `<b>${L.name.toUpperCase()}</b><small>${L.blurb}</small><i>${rec ? (L.waves ? 'BEST: WAVE ' + rec.wave : '✔ CLEARED · ' + rec.time + 's') : (L.waves ? 'SURVIVE THE WAVES' : L.enemies.count + ' BRAWLERS + ' + L.boss.name)}</i>`;
+    el.innerHTML = `<b>${L.name.toUpperCase()}</b><small>${L.blurb}</small><i>${rec ? (L.waves ? 'BEST: WAVE ' + (rec.wave || 0) : rec.time ? '✔ CLEARED · ' + rec.time + 's' : 'NOT CLEARED YET') + (rec.score ? ' · 🏆 ' + rec.score.toLocaleString() : '') : (L.waves ? 'SURVIVE THE WAVES' : L.enemies.count + ' BRAWLERS + ' + L.boss.name)}</i>`;
     el.onclick = () => start(L.id);
     list.appendChild(el);
   }
@@ -658,14 +740,16 @@ function endRun(win){
   audio.crowd(false); audio.music(false);
   if(document.exitPointerLock) document.exitPointerLock();
   const s = W.stats, L = W.L;
-  const cash = s.kills * 120 + s.limbs * 30 + s.heads * 60 + s.exploded * 80 + (win ? 2500 : 0) + (L.waves ? s.wave * 400 : 0);
+  const cash = Math.round(s.score * 0.5) + s.kills * 60 + s.limbs * 30 + s.heads * 60 + s.exploded * 80 + (win ? 2500 : 0) + (L.waves ? s.wave * 400 : 0);
   try{ const raw = localStorage.getItem(SAVE_KEY); if(raw){ const sv = JSON.parse(raw); sv.cash = Math.max(0, Math.floor((+sv.cash || 0) + cash)); localStorage.setItem(SAVE_KEY, JSON.stringify(sv)); } }catch(e){}
   const b = best(), t = Math.round(s.t);
-  if(L.waves){ if(!b[L.id] || s.wave > b[L.id].wave) b[L.id] = { wave:s.wave }; }
-  else if(win && (!b[L.id] || t < b[L.id].time)) b[L.id] = { time:t };
+  if(L.waves){ if(!b[L.id] || !(b[L.id].wave >= s.wave)) b[L.id] = Object.assign(b[L.id] || {}, { wave:s.wave }); }
+  else if(win && (!b[L.id] || !(b[L.id].time <= t))) b[L.id] = Object.assign(b[L.id] || {}, { time:t });
   try{ localStorage.setItem(BEST_KEY, JSON.stringify(b)); }catch(e){}
   $('r-title').textContent = L.waves ? 'SURVIVED ' + (s.wave - 1) + ' WAVES' : win ? 'TOWN PAINTED RED' : 'YOU GOT PAINTED';
-  const rows = [['Kills', s.kills], ['Limbs removed', s.limbs], ['Heads taken', s.heads], ['Obliterated', s.exploded], ['Blood splats', W.fx.splats], ['Time', t + 's'], ['City Driver cash', '+$' + cash.toLocaleString()]];
+  const prevBest = (b[L.id] && b[L.id].score) || 0;
+  if(s.score > prevBest){ b[L.id] = Object.assign(b[L.id] || {}, { score:s.score }); try{ localStorage.setItem(BEST_KEY, JSON.stringify(b)); }catch(e){} }
+  const rows = [['SCORE', s.score.toLocaleString() + (s.score > prevBest ? ' 🏆 NEW BEST' : '')], ['Best combo', '×' + s.bestCombo], ['Parries', s.parries], ['Kills', s.kills], ['Limbs removed', s.limbs], ['Heads taken', s.heads], ['Obliterated', s.exploded], ['Blood splats', W.fx.splats], ['Time', t + 's'], ['City Driver cash', '+$' + cash.toLocaleString()]];
   $('r-stats').innerHTML = rows.map(([a, v]) => `<span>${a}</span><span>${v}</span>`).join('');
   $('result').classList.remove('hidden'); $('hud').classList.add('hidden'); $('touch').classList.add('hidden');
 }
@@ -678,6 +762,21 @@ $('r-menu').onclick = () => { $('result').classList.add('hidden'); buildMenu(); 
 document.addEventListener('visibilitychange', () => { if(document.hidden && running && !paused) togglePause(true); });
 
 requestAnimationFrame(frame);
+function openSettings(){
+  const el = $('settings'); el.classList.remove('hidden');
+  const sync = () => {
+    $('s-sens-v').textContent = settings.sens.toFixed(1) + '×'; $('s-fov-v').textContent = settings.fov + '°';
+    document.querySelectorAll('#s-gore button').forEach(b => b.classList.toggle('on', +b.dataset.v === settings.gore));
+    document.querySelectorAll('#s-qual button').forEach(b => b.classList.toggle('on', +b.dataset.v === settings.quality));
+  };
+  $('s-sens').value = settings.sens; $('s-fov').value = settings.fov; sync();
+  $('s-sens').oninput = e => { settings.sens = +e.target.value; sync(); saveSettings(); };
+  $('s-fov').oninput = e => { settings.fov = +e.target.value; camera.fov = settings.fov; camera.updateProjectionMatrix(); sync(); saveSettings(); };
+  document.querySelectorAll('#s-gore button').forEach(b => b.onclick = () => { settings.gore = +b.dataset.v; if(W){ W.gore = settings.gore; W.fx.gore = settings.gore; } sync(); saveSettings(); });
+  document.querySelectorAll('#s-qual button').forEach(b => b.onclick = () => { settings.quality = +b.dataset.v; renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, settings.quality ? (TOUCH ? 1.5 : 1.75) : 1)); orient.refresh(); sync(); saveSettings(); });
+  $('s-close').onclick = () => el.classList.add('hidden');
+}
+$('m-settings').onclick = openSettings; $('p-settings').onclick = openSettings;
 buildMenu();
 const q = new URLSearchParams(location.search).get('map');
 if(q) start(q);

@@ -92,3 +92,23 @@ describe('brawl hit location', () => {
   it('scales with big bosses', () => assert.equal(partFromHit(1.7, 0, 1.35), 'torso'));
   it('a missing part redirects to the torso', () => assert.equal(partFromHit(1.7, 0, 1, { head:true }), 'torso'));
 });
+
+import { carveVoxels } from '../js/brawl/voxel.js';
+describe('voxel carving', () => {
+  const block = () => { const m = new Map(); for(let x = 0; x < 6; x++) for(let y = 0; y < 6; y++) for(let z = 0; z < 6; z++) m.set(`${x},${y},${z}`, 0xf1c27d); return m; };
+  it('knocks out voxels around the impact and returns them with their colours', () => {
+    const m = block(), r = carveVoxels(m, 3, 3, 6, 2, () => 0.5);
+    assert.ok(r.length > 3 && r.length < 40, String(r.length));
+    assert.equal(m.size, 216 - r.length);
+    for(const [x, y, z, c] of r){ assert.ok(!m.has(`${x},${y},${z}`)); assert.equal(c, 0xf1c27d); }
+  });
+  it('stains the exposed rim red, leaves the far side alone', () => {
+    const m = block(); carveVoxels(m, 3, 3, 6, 2, () => 0.5);
+    const reds = [...m.values()].filter(c => c !== 0xf1c27d).length;
+    assert.ok(reds > 5);
+    assert.equal(m.get('0,0,0'), 0xf1c27d);
+  });
+  it('a miss changes nothing', () => {
+    const m = block(); assert.equal(carveVoxels(m, 40, 40, 40, 2).length, 0); assert.equal(m.size, 216);
+  });
+});

@@ -35,6 +35,7 @@ export function createFX(scene, L){
   const BLOODS = [0x9a0a0a, 0xb01010, 0x7a0606, 0xc81818];
   // a burst of body voxels + blood from a wound. dir = which way the hit pushed
   function burst(x, y, z, n, palette, dirX = 0, dirZ = 0, power = 1){
+    n = Math.round(n * (api.gore ?? 1));
     for(let k = 0; k < n; k++){
       const isB = k % 2 === 0 || !palette;
       const col = isB ? BLOODS[k & 3] : palette[(Math.random() * palette.length) | 0];
@@ -166,5 +167,6 @@ export function createFX(scene, L){
     }
   }
 
-  return { gib, burst, glass, splat, pool, addDebris, tracer, update, nudge, get splats(){ return splatCount; } };
+  const api = { gib, burst, glass, splat, pool, addDebris, tracer, update, nudge, gore:1, get splats(){ return splatCount; } };
+  return api;
 }
