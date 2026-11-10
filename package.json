@@ -1,0 +1,16 @@
+{
+  "name": "city-painter",
+  "version": "1.0.0",
+  "description": "City Painter — paint the town red: first-person voxel bar brawler for phone and PC",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "esbuild js/brawl/main.js --bundle --minify --format=iife --outfile=js/bundle.js",
+    "build:dev": "esbuild js/brawl/main.js --bundle --format=iife --outfile=js/bundle.js --sourcemap",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "three": "0.160.0"
+  }
+}
