@@ -91,7 +91,8 @@ function alarm(pos, by, r = 7){
   for(const f of W.fighters){
     if(!f.calm || !f.alive) continue;
     const d = Math.hypot(f.pos.x - pos.x, f.pos.z - pos.z);
-    if(d < r) f.provoke(Math.random() < 0.6 ? by : null, 0.25 + Math.random() * 1.4 + d * 0.08);
+    // most witnesses just start swinging at whoever's next to them; a few come for whoever started it
+    if(d < r) f.provoke(Math.random() < (d < 2.5 ? 0.45 : 0.2) ? by : null, 0.25 + Math.random() * 1.4 + d * 0.08);
   }
   onBrawl();
 }

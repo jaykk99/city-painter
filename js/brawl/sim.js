@@ -122,7 +122,9 @@ export class Fighter {
     // until you throw the first punch, then the brawl spreads
     this.calm = !opts.hostile; this.activity = opts.activity || 'idle';
     this.home = new THREE.Vector3(x, 0, z); this.wander = null; this.idleT = Math.random() * 4; this.joinT = null; this.joinBy = null;
-    this.aggro = opts.aggro ?? (0.65 + Math.random() * 0.3);   // chance a fighter goes for you rather than a neighbour
+    this.aggro = opts.aggro ?? (0.22 + Math.random() * 0.25);   // chance a fighter goes for you rather than a neighbour
+    // prison has sides: guards vs inmates
+    this.team = outfit.guard ? 'guard' : (W.L.id === 'prison' ? 'inmate' : null);
     this.speed = (2.6 + Math.random() * 1.0) * (this.boss ? 0.85 : 1);
     this.giveWeapon(weaponId);
     this.wounds = 0;
@@ -186,7 +188,7 @@ export class Fighter {
     const W = this.W;
     if(this.calm && this.alive){ this.provoke(attacker); W.alarm(this.pos, attacker); }
     this.lastHitBy = attacker || this.lastHitBy;
-    if(attacker && !attacker.isPlayer && attacker !== this && Math.random() < 0.7) this.target = attacker;   // grudges start brawls
+    if(attacker && !attacker.isPlayer && attacker !== this && attacker.alive && Math.random() < 0.85) this.target = attacker;   // grudges start brawls
     else if(attacker && attacker.isPlayer) this.target = attacker;
     // blocking: a guard soaks most of a normal hit; heavy / charged blows smash through it
     if(this.alive && this.state === 'block' && attacker){
@@ -341,10 +343,18 @@ export class Fighter {
     const W = this.W, me = this;
     if(this.calm) return null;
     const others = W.fighters.filter(f => f !== me && f.alive);
-    if(W.player.alive && (Math.random() < this.aggro || !others.length || this.boss)) return W.player;
-    let best = null, bd = 1e9;
-    for(const f of others){ const d = f.pos.distanceToSquared(this.pos); if(d < bd){ bd = d; best = f; } }
-    return best || (W.player.alive ? W.player : null);
+    // it's a free-for-all: only a few people gang up on you at once, the rest brawl each other
+    const onPlayer = W.fighters.filter(f => f !== me && f.alive && !f.calm && f.target === W.player).length;
+    const cap = W.L.waves ? 4 : 3;
+    if(W.player.alive && (this.boss || !others.length || (onPlayer < cap && Math.random() < this.aggro))) return W.player;
+    let pool = others;
+    if(this.team){ const foes = others.filter(f => f.team && f.team !== this.team); if(foes.length && Math.random() < 0.8) pool = foes; }
+    const hostile = pool.filter(f => !f.calm);
+    if(hostile.length && Math.random() < 0.8) pool = hostile;
+    // one of the few nearest, not always the very nearest
+    const near = pool.map(f => [f.pos.distanceToSquared(this.pos), f]).sort((a, b) => a[0] - b[0]).slice(0, 3);
+    if(near.length) return near[(Math.random() * near.length) | 0][1];
+    return W.player.alive ? W.player : null;
   }
   update(dt){
     const W = this.W;
@@ -473,17 +483,27 @@ export class Fighter {
       if(this.wstate.ammo <= 0) this.dropWeapon(true);
       return;
     }
-    const dx = tg.pos.x - this.pos.x, dz = tg.pos.z - this.pos.z, d = Math.hypot(dx, dz);
-    const reach = (armed ? w.reach : 1.4) + tg.radius + 0.25;
-    const ang = Math.abs(Math.atan2(fx * dz - fz * dx, fx * dx + fz * dz));
-    if(d > reach || ang > 0.9) { W.audio.whoosh(); return; }
-    const dir = _v.set(dx / d, 0, dz / d);
+    // everyone in the swing's arc is fair game: the target first, otherwise whoever's in the way
+    const baseReach = armed ? w.reach : 1.4;
+    const inArc = [];
+    for(const o of W.targets()){
+      if(o === this || o.gone || (!o.alive && !o.corpse) || (o.isPlayer && !o.alive)) continue;
+      const ox = o.pos.x - this.pos.x, oz = o.pos.z - this.pos.z, od = Math.hypot(ox, oz);
+      if(od > baseReach + o.radius + 0.25 || od < 0.01) continue;
+      if(Math.abs(Math.atan2(fx * oz - fz * ox, fx * ox + fz * oz)) > 0.9) continue;
+      inArc.push([o === tg ? -1 : od, o, ox / od, oz / od]);
+    }
+    if(!inArc.length){ W.audio.whoosh(); return; }
+    inArc.sort((a, b) => a[0] - b[0]);
     const wd = armed ? w : (this.missing.armR && this.missing.armL ? { dmg:6, knock:3, sever:0, kind:'melee' } : wdef('fists'));
     const dmg = wd.dmg * (this.boss ? 1.4 : 0.75);
-    if(tg.isPlayer) W.hurtPlayer(dmg, dir, (wd.knock || 2) * (this.boss ? 1.5 : 1), this);
-    else {
-      const r = Math.random(), part = r < 0.2 ? 'head' : r < 0.6 ? 'torso' : LIMBS[(Math.random() * 4) | 0];
-      W.hit(tg, tg.missing[part] ? 'torso' : part, wd, dir, this, {});
+    for(const [, o, nx, nz] of inArc.slice(0, wd.heavy ? 2 : 1)){
+      const dir = _v.set(nx, 0, nz);
+      if(o.isPlayer) W.hurtPlayer(dmg, dir, (wd.knock || 2) * (this.boss ? 1.5 : 1), this);
+      else {
+        const r = Math.random(), part = r < 0.2 ? 'head' : r < 0.6 ? 'torso' : LIMBS[(Math.random() * 4) | 0];
+        W.hit(o, o.missing[part] ? 'torso' : part, wd, dir, this, {});
+      }
     }
     if(armed){ const nw = wear(this.weapon, this.wstate); if(nw !== this.weapon){ if(w.shatter){ const p = this.partWorld('armR', _v2); W.fx.glass(p.x, p.y, p.z); W.audio.glass(); } this.giveWeapon(nw); } }
   }
