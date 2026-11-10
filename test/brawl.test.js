@@ -48,7 +48,7 @@ describe('brawl weapons', () => {
 describe('brawl scenarios', () => {
   const all = SCENARIOS.map(f => f());
   it('has the classic scenarios + arena', () => {
-    assert.deepEqual(all.map(L => L.id), ['biker', 'disco', 'prison', 'saloon', 'pirate', 'arena']);
+    assert.deepEqual(all.map(L => L.id), ['biker', 'disco', 'prison', 'saloon', 'pirate', 'viking', 'medieval', 'dojo', 'speakeasy', 'office', 'arena']);
     assert.equal(getScenario('pirate').name, 'Pirate Cove');
     assert.equal(getScenario('zzz').id, 'biker');
   });
@@ -70,7 +70,7 @@ describe('brawl scenarios', () => {
     });
   }
   it('every outfit kind dresses a full person', () => {
-    for(const k of ['biker', 'bikerBoss', 'disco', 'discoBoss', 'prison', 'warden', 'cowboy', 'sheriff', 'pirate', 'captain', 'champion', 'mixed']){
+    for(const k of ['biker', 'bikerBoss', 'disco', 'discoBoss', 'prison', 'warden', 'cowboy', 'sheriff', 'pirate', 'captain', 'viking', 'jarl', 'medieval', 'blackKnight', 'ninja', 'sensei', 'gangster', 'mobBoss', 'office', 'ceo', 'champion', 'mixed']){
       for(let i = 0; i < 10; i++){ const o = outfitFor(k, rng); for(const f of ['skin', 'pants', 'shoe']) assert.equal(typeof o[f], 'number', k + '.' + f); }
     }
   });

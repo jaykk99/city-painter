@@ -73,6 +73,10 @@ function headVox(o){
     case 'cap': fill(v, 0, 6, 0, 6, 1, 6, o.hatC); fill(v, 1, 5, 6, 4, 1, 2, o.hatC); break;
     case 'cowboy': fill(v, -2, 6, -2, 10, 1, 10, o.hatC); fill(v, 0, 7, 0, 6, 2, 6, o.hatC); fill(v, 0, 7, 0, 6, 1, 6, (x, y, z) => (x === 0 || x === 5 || z === 0 || z === 5) ? 0x2a1a0e : o.hatC); break;
     case 'tricorn': fill(v, -1, 6, -1, 8, 1, 8, o.hatC); fill(v, 0, 7, 0, 6, 2, 6, o.hatC); v.set(K(2, 8, 6), 0xf0f0f0); v.set(K(3, 8, 6), 0xf0f0f0); break;
+    case 'horns': fill(v, -1, 4, -1, 8, 3, 8, (x, y, z) => (z === 7 && y < 6 && x > 0 && x < 7) ? null : (y === 4 ? 0x8a6a30 : o.hatC)); for(const sx of [-2, 7]){ v.set(K(sx, 6, 3), 0xf0e8d0); v.set(K(sx, 7, 3), 0xf0e8d0); v.set(K(sx + (sx < 0 ? 0 : 0), 8, 3), 0xf0e8d0); } break;
+    case 'fedora': fill(v, -1, 6, -1, 8, 1, 8, o.hatC); fill(v, 0, 7, 0, 6, 2, 6, (x, y, z) => y === 7 && true ? 0x222222 : o.hatC); fill(v, 0, 7, 0, 6, 1, 6, 0x1a1a1a); fill(v, 0, 8, 0, 6, 1, 6, o.hatC); break;
+    case 'headband': fill(v, 0, 4, 0, 6, 1, 6, (x, y, z) => (z === 5 || z === 0 || x === 0 || x === 5) ? o.hatC : null); v.set(K(2, 4, -1), o.hatC); v.set(K(3, 3, -1), o.hatC); v.set(K(3, 4, 6), 0xd01818); break;
+    case 'knight': fill(v, -1, -1, -1, 8, 8, 8, (x, y, z) => (z === 7 && (y === 3) && x > 0 && x < 7) ? 0x111111 : o.hatC); fill(v, 3, 7, -1, 2, 2, 8, 0xb02020); break;
     case 'helmet': fill(v, -1, 3, -1, 8, 4, 8, (x, y, z) => (z === 7 && y < 3 && x > 0 && x < 7) ? null : o.hatC); fill(v, 3, 7, -1, 2, 2, 7, 0xb02020); break;
   }
   return v;
@@ -89,6 +93,8 @@ function torsoVox(o){
     return shirt;
   });
   if(o.badge) v.set(K(5, 6, 3), 0xffd23f);
+  if(o.tie != null) for(let y = 2; y < 9; y++){ v.set(K(3, y, 3), o.tie); if(y > 3) v.set(K(4, y, 3), o.tie); }
+  if(o.belt != null) for(let x = 0; x < 8; x++) v.set(K(x, 1, 3), o.belt);
   if(o.guard){ v.set(K(2, 7, 3), 0xffd23f); }
   return v;
 }

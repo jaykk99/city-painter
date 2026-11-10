@@ -10,16 +10,23 @@ First-person voxel bar brawler for phone and PC, in the style of *Paint the Town
 - **Prison** — inmates *and* guards; boss: the Warden
 - **Western Saloon** — boss: the Sheriff
 - **Pirate Cove** — boss: Captain Redbeard
+- **Mead Hall** — Viking feast; battle axes, mead horns, throwing axes; boss: Jarl Bloodaxe
+- **Medieval Tavern** — peasants and knights; longswords, maces, flails, crossbow; boss: the Black Knight
+- **Dojo** — black belts; nunchucks, bo staffs, naginata, katanas, kunai; boss: the Sensei
+- **Speakeasy** — 1920s mobsters and a jazz pianist; tommy guns; boss: Big Tony
+- **Office Party** — keyboards, monitors, fire extinguishers, office chairs, golf clubs; boss: the CEO
 - **Arena** — endless waves, a boss every 5th wave, every weapon on the rack
 
 ## How a fight starts
+It's a free-for-all: only a few brawlers come for you at once, the rest fight each other, hold grudges, and wild swings hit whoever's in the way (in the Prison, guards and inmates are on opposite sides).
+
 Like the real game, every bar starts **calm**: people drink, dance and play pool, and someone's on the jukebox / DJ booth / piano. Nobody touches you until you throw the first punch (or fire a shot, or light dynamite). Then everyone nearby piles in, the brawl spreads across the room, more people pour in through the doors, and if you hit whoever's running the music, the music stops. The Arena is the exception: waves come in swinging.
 
 ## Gore physics
 Everyone is made of voxels and comes apart. **Every hit knocks real voxels out** — punches dent faces, bats cave in skulls, the crater's rim turns red, and a body part carved down far enough falls off or bursts. Blades sever arms, legs and heads (rigid debris that tumbles and bounces); sledgehammers, the anchor and dynamite pulp bodies into cubes; blood splats floors and walls; corpses ragdoll and can be mutilated; kicked bodies fly, slam walls and bowl people over.
 
-## 39 weapons
-Bottles (break into broken bottles), mugs, pool cues, stools, chairs, stool legs, bats, spiked bats, frying pan, knife, shiv, cleaver, machete, fire axe, sledgehammer, crowbar, pipe wrench, bike chain, guitar, mic stand, katana, cutlass, spear, pitchfork, shovel, weight plate, dumbbell, guard baton, anchor, brass knuckles · revolver, double barrel, flintlock, lever rifle, tommy gun · dynamite, throwing knives, cannonball. Anything can be thrown.
+## 56 weapons
+Bottles (break into broken bottles), mugs, pool cues, stools, chairs, stool legs, bats, spiked bats, frying pan, knife, shiv, cleaver, machete, fire axe, sledgehammer, crowbar, pipe wrench, bike chain, guitar, mic stand, katana, cutlass, spear, pitchfork, shovel, weight plate, dumbbell, guard baton, anchor, brass knuckles, battle axe, war hammer, longsword, mace, flail, mead horn, goblet, nunchucks, bo staff, naginata, golf club, keyboard, monitor, fire extinguisher, office chair · revolver, crossbow, double barrel, flintlock, lever rifle, tommy gun · dynamite, throwing knives, kunai, throwing axes, cannonball. Anything can be thrown.
 
 ## Fighting
 - **Power hits:** hold attack to wind up — more damage, more knockback, cuts deeper, smashes through guards

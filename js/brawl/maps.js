@@ -176,13 +176,106 @@ function arena(){
     boss:{ name:'THE CHAMPION', outfit:'champion', weapon:'axe', scale:1.4, hp:4 } };
   for(const [x, z] of [[-8, -8], [8, -8], [-8, 8], [8, 8]]) L.solids.push(box(x, z, 1.4, 1.4, 3, 0xa89878));
   // the weapon racks: one of everything melee
-  const rack = ['katana', 'axe', 'sledge', 'machete', 'spear', 'spikedbat', 'cleaver', 'cutlass', 'pitchfork', 'crowbar', 'bat', 'shovel', 'knuckles', 'wrench', 'chain', 'anchor'];
+  const rack = ['katana', 'axe', 'sledge', 'machete', 'spear', 'spikedbat', 'cleaver', 'cutlass', 'pitchfork', 'crowbar', 'bat', 'shovel', 'knuckles', 'wrench', 'chain', 'anchor', 'battleaxe', 'warhammer', 'longsword', 'flail', 'naginata', 'nunchucks'];
   rack.forEach((w, i) => { const a = (i / rack.length) * Math.PI * 2; L.pickups.push({ w, x:Math.cos(a) * 12.5, z:Math.sin(a) * 12.5, y:0 }); });
   L.pickups.push({ w:'shotgun', x:2, z:2, y:0 }, { w:'revolver', x:-2, z:2, y:0 }, { w:'dynamite', x:0, z:-2.5, y:0 }, { w:'tknives', x:2, z:-2, y:0 });
   return L;
 }
 
-export const SCENARIOS = [bikerBar, disco, prison, saloon, pirate, arena];
+function longTable(x, z, len, alongX, c = 0x6b4423, items = ['horn', 'mug']){
+  const k = kit();
+  const w = alongX ? len : 1.1, d = alongX ? 1.1 : len;
+  k.solids.push(box(x, z, w, d, 0.8, c));
+  // benches either side: low enough to step onto
+  for(const s of [-1, 1]) k.solids.push(box(alongX ? x : x + s * 0.95, alongX ? z + s * 0.95 : z, alongX ? len : 0.4, alongX ? 0.4 : len, 0.42, 0x4a2a12));
+  const n = Math.floor(len / 1.4);
+  for(let i = 0; i < n; i++){ const t = -len / 2 + 0.7 + i * 1.4; k.pickups.push({ w:items[i % items.length], x:alongX ? x + t : x + (i % 2 ? 0.25 : -0.25), z:alongX ? z + (i % 2 ? 0.25 : -0.25) : z + t, y:0.86 }); }
+  return k;
+}
+function desk(x, z, c = 0xc8c0b0){
+  const k = kit();
+  k.solids.push(box(x, z, 1.6, 0.8, 0.75, c));
+  k.deco.push(box(x, z - 0.25, 1.6, 0.05, 0.5, 0x8a8a9a, 0.75));                       // cubicle divider
+  k.pickups.push({ w:'monitor', x:x - 0.3, z:z - 0.05, y:0.81 }, { w:'keyboard', x:x + 0.35, z:z + 0.15, y:0.81 }, { w:'officechair', x:x, z:z + 0.85, y:0 });
+  return k;
+}
+
+function vikingHall(){
+  const L = { id:'viking', name:'Mead Hall', blurb:'Feast night in the longhouse. The jarl\'s men are drunk and armed.',
+    w:28, d:16, h:6, floor:{ c1:0x6a4a2a, c2:0x5e4024, kind:'planks' }, wall:0x5a3a1e, trim:0x2a1a0c, ceil:0x2a1a0e,
+    light:0xff9040, ambient:0x4a3020, fog:0x1a0e06, lamps:[[-9, 0], [0, 0], [9, 0], [-4, -5], [4, 5]],
+    player:[-12, 0, -Math.PI / 2], solids:[], deco:[], pickups:[],
+    enemies:{ count:20, maxActive:10, outfits:'viking', weapons:{ fists:3, horn:2, battleaxe:1, longsword:1, mace:1, throwaxe:1, spear:1, knife:1 } },
+    boss:{ name:'JARL BLOODAXE', outfit:'jarl', weapon:'battleaxe', scale:1.4, hp:3.5 } };
+  merge(L, longTable(0, -4.2, 14, true)); merge(L, longTable(0, 4.2, 14, true));
+  L.solids.push(box(0, 0, 3, 1.6, 0.4, 0x3a3a3a, 0, { glow:0xff5010 }));                  // fire pit
+  L.solids.push(box(12.6, 0, 1.2, 3, 1.4, 0x4a2a12)); L.deco.push(box(12.6, 0, 1.4, 1.4, 1.2, 0xc9a23a, 1.4));   // throne
+  for(const z of [-7.4, 7.4]) for(const x of [-10, -3, 3, 10]) L.solids.push(box(x, z, 0.5, 0.5, 6, 0x4a2a12));    // pillars
+  L.pickups.push({ w:'battleaxe', x:11, z:-2.5, y:0 }, { w:'warhammer', x:11, z:2.5, y:0 }, { w:'throwaxe', x:-12.6, z:-6.5, y:0 }, { w:'longsword', x:-12.6, z:6.5, y:0 }, { w:'spear', x:6, z:0, y:0 }, { w:'mace', x:-6, z:0, y:0 });
+  return L;
+}
+function medievalTavern(){
+  const L = { id:'medieval', name:'Medieval Tavern', blurb:'The Prancing Boar. Peasants, knights and one very angry innkeeper.',
+    w:22, d:20, h:4.8, floor:{ c1:0x6a6058, c2:0x5e544c, kind:'stone' }, wall:0x8a7a62, trim:0x3a2a18, ceil:0x3a2a18,
+    light:0xffa050, ambient:0x4a3a2a, fog:0x1a120a, lamps:[[-5, -4], [5, -4], [0, 3], [-6, 6], [6, 6]],
+    player:[0, 8, 0], solids:[], deco:[], pickups:[],
+    enemies:{ count:18, maxActive:9, outfits:'medieval', weapons:{ fists:3, goblet:2, mug:2, mace:1, longsword:1, flail:1, pitchfork:1, knife:1 } },
+    boss:{ name:'THE BLACK KNIGHT', outfit:'blackKnight', weapon:'warhammer', scale:1.35, hp:4 } };
+  merge(L, barCounter(-8.6, -2, 10, false, 0x5a3a1e, 0x3a2410));
+  merge(L, stools(-7.5, -2, 7, false, 1.2));
+  L.solids.push(box(0, -9.4, 4, 1, 2.2, 0x5a5048, 0, { glow:0xff6020 }));                 // hearth
+  for(const [x, z] of [[-2, -4], [3, -4], [-2, 2], [3, 2], [7, -1]]) merge(L, table(x, z, false, 0x5a3a1e));
+  merge(L, barrel(9.8, 8.6)); merge(L, barrel(8.8, 8.8)); merge(L, barrel(9.8, 7.6)); merge(L, crate(-9.6, 8.6));
+  L.pickups.push({ w:'longsword', x:9.5, z:-8.5, y:0 }, { w:'mace', x:-3, z:-9, y:0 }, { w:'flail', x:9.6, z:0, y:0 }, { w:'crossbow', x:-8.6, z:2, y:1.11 }, { w:'goblet', x:-8.6, z:-5, y:1.11 }, { w:'throwaxe', x:0, z:-8.6, y:0 });
+  return L;
+}
+function dojo(){
+  const L = { id:'dojo', name:'Dojo', blurb:'Paper walls, polished mats and a room full of black belts.',
+    w:22, d:22, h:5, floor:{ c1:0xc8b878, c2:0xbcac6c, kind:'tatami' }, wall:0xeee6d0, trim:0x3a2414, ceil:0x5a3a1e, bright:0.55,
+    light:0xfff0d8, ambient:0x6a6050, fog:0x2a2418, lamps:[[-5, -5], [5, -5], [-5, 5], [5, 5]],
+    player:[0, 9, 0], solids:[], deco:[], pickups:[],
+    enemies:{ count:20, maxActive:9, outfits:'ninja', weapons:{ fists:5, nunchucks:2, bostaff:2, katana:1, kunai:1, naginata:1 } },
+    boss:{ name:'THE SENSEI', outfit:'sensei', weapon:'katana', scale:1.2, hp:3.5 } };
+  // paper-wall panel frames (decor)
+  for(let i = -4; i <= 4; i++){ for(const z of [-10.95, 10.95]) L.deco.push(box(i * 2.4, z, 0.08, 0.06, 4.6, 0x3a2414)); for(const x of [-10.95, 10.95]) L.deco.push(box(x, i * 2.4, 0.06, 0.08, 4.6, 0x3a2414)); }
+  // weapon racks + shrine
+  for(const x of [-10.4, 10.4]) L.solids.push(box(x, 0, 0.5, 6, 1.6, 0x3a2414));
+  L.solids.push(box(0, -10.4, 5, 0.8, 1.2, 0x3a2414)); L.deco.push(box(0, -10.6, 1, 0.3, 1.4, 0xd01818, 1.2));
+  for(const z of [-2, 0, 2]){ L.pickups.push({ w:z ? 'bostaff' : 'naginata', x:-9.9, z, y:0 }, { w:z ? 'nunchucks' : 'katana', x:9.9, z, y:0 }); }
+  L.pickups.push({ w:'kunai', x:-1.5, z:-9.6, y:0 }, { w:'kunai', x:1.5, z:-9.6, y:0 }, { w:'katana', x:0, z:-10.4, y:1.2 });
+  return L;
+}
+function speakeasy(){
+  const L = { id:'speakeasy', name:'Speakeasy', blurb:'1928. Bootleg gin, a jazz band, and the Moretti family owes you nothing.',
+    w:22, d:18, h:4.4, floor:{ c1:0x1a1a1a, c2:0xe8e0d0, kind:'checker' }, wall:0x3a1a20, trim:0xc9a23a, ceil:0x1a0a0e,
+    light:0xffc070, ambient:0x3a2028, fog:0x0e0608, lamps:[[-6, -3], [0, 0], [6, -3], [-5, 5], [5, 5]],
+    player:[0, 7.5, 0], musician:[8.6, 6.4, 0], solids:[], deco:[], pickups:[],
+    enemies:{ count:18, maxActive:9, outfits:'gangster', weapons:{ fists:4, bottle:3, revolver:2, knife:1, bat:1, tommy:1, knuckles:1 } },
+    boss:{ name:'BIG TONY', outfit:'mobBoss', weapon:'tommy', scale:1.35, hp:3.2 } };
+  merge(L, barCounter(-1, -7.4, 11, true, 0x3a1a10, 0xc9a23a));
+  merge(L, backShelf(-1, -8.6, 11, true));
+  merge(L, stools(-1, -6.4, 9, true, 1.15));
+  L.solids.push(box(8.6, 7.6, 2.4, 1, 1.4, 0x111111));                                     // piano
+  for(const [x, z] of [[-6, 0], [-6, 4.5], [0, 2], [5, -1], [5, 3]]) merge(L, table(x, z, true, 0x2a1a10));
+  L.pickups.push({ w:'tommy', x:-6, z:-7.4, y:1.11 }, { w:'revolver', x:3, z:-7.4, y:1.11 }, { w:'golfclub', x:-10, z:7.5, y:0 }, { w:'bat', x:10, z:-1, y:0 }, { w:'dynamite', x:-10.2, z:-3, y:0 });
+  return L;
+}
+function office(){
+  const L = { id:'office', name:'Office Party', blurb:'Friday, 4:59 pm. Performance reviews came back. Someone snapped.',
+    w:26, d:20, h:3.6, floor:{ c1:0x4a5262, c2:0x404858, kind:'carpet' }, wall:0xd8d4c8, trim:0x8a8a8a, ceil:0xe8e8e0, bright:0.7,
+    light:0xf0f4ff, ambient:0x606878, fog:0x2a2e36, lamps:[[-8, -5], [0, -5], [8, -5], [-8, 5], [0, 5], [8, 5]],
+    player:[0, 8.5, 0], solids:[], deco:[], pickups:[],
+    enemies:{ count:22, maxActive:10, outfits:'office', weapons:{ fists:5, keyboard:2, golfclub:1, extinguisher:1, mug:2, knife:1, officechair:1 } },
+    boss:{ name:'THE CEO', outfit:'ceo', weapon:'golfclub', scale:1.3, hp:3.5 } };
+  for(const x of [-8, -3, 3, 8]) for(const z of [-5, 0]) merge(L, desk(x, z));
+  L.solids.push(box(10.5, 6.5, 3, 1.6, 0.76, 0x3a2a1a));                                   // boss's desk
+  L.solids.push(box(-11.6, 6, 1.2, 2.4, 1.0, 0xe0e0e0));                                    // snack table
+  L.solids.push(box(-12.4, -8.6, 0.9, 0.9, 1.6, 0x3a6aa0, 0, { glow:0x6aa0ff }));            // water cooler
+  L.pickups.push({ w:'extinguisher', x:12.4, z:-8.8, y:0 }, { w:'extinguisher', x:-12.4, z:8.8, y:0 }, { w:'golfclub', x:10.5, z:6.5, y:0.76 }, { w:'mug', x:-11.6, z:5.4, y:1 }, { w:'mug', x:-11.6, z:6.6, y:1 }, { w:'knife', x:-11.6, z:6, y:1 });
+  return L;
+}
+
+export const SCENARIOS = [bikerBar, disco, prison, saloon, pirate, vikingHall, medievalTavern, dojo, speakeasy, office, arena];
 export const scenarioIds = () => SCENARIOS.map(f => f().id);
 export function getScenario(id){ const f = SCENARIOS.find(f => f().id === id) || SCENARIOS[0]; return f(); }
 
@@ -236,8 +329,23 @@ export function outfitFor(kind, rng){
     case 'pirate': return { skin, shirt:pick([0xffffff, 0xd0d0c0]), stripes:pick([0xb02020, 0x202060, 0x222222]), pants:pick([0x3a2a1a, 0x2a2a3a, 0x6a5a40]),
       hair:pick([0x222222, 0x5a3a1a, 0xb04020]), beard:pick([null, 0x222222, 0xb04020]), hat:pick(['bandana', 'bandana', 'tricorn']), hatC:pick([0xb02020, 0x202060, 0x222222]), shoe:0x2a1a0e, eyepatch:rng() < 0.3 };
     case 'captain': return { skin:0xffdbac, shirt:0x8a1a1a, vest:0xc9a23a, pants:0x222222, hair:0xb03010, beard:0xb03010, hat:'tricorn', hatC:0x111111, shoe:0x111111, eyepatch:true };
+    case 'viking': return { skin, shirt:pick([0x6a5a40, 0x4a3a2a, 0x7a2a1a, 0x3a4a3a]), vest:pick([0x8a6a40, 0x5a4a30, null]), pants:pick([0x3a2a1a, 0x4a4a3a]),
+      hair:pick([0xd09040, 0xb04020, 0x5a3a1a, 0xe0c080]), beard:pick([0xd09040, 0xb04020, 0x5a3a1a, 0xe0c080]), hat:pick(['horns', 'horns', null]), hatC:0x777777, shoe:0x3a2a1a };
+    case 'jarl': return { skin:0xffdbac, shirt:0x5a1a1a, vest:0x8a6a40, pants:0x2a2a2a, hair:0xb04020, beard:0xb04020, hat:'horns', hatC:0xc9a23a, shoe:0x2a1a0e };
+    case 'medieval': return rng() < 0.25
+      ? { skin, shirt:0x8a8a90, pants:0x6a6a70, hair:null, hat:'knight', hatC:0x9a9aa0, shoe:0x5a5a60 }
+      : { skin, shirt:pick([0x6a5030, 0x4a5a30, 0x7a3a2a, 0x8a7a5a]), vest:pick([null, 0x4a3018]), pants:pick([0x4a3a2a, 0x5a4a3a]), hair:pick([0x5a3a1a, 0x222222, 0xb08040, null]), beard:pick([null, 0x5a3a1a, 0x888888]), shoe:0x3a2a1a, belt:0x2a1a0a };
+    case 'blackKnight': return { skin:0xffdbac, shirt:0x222226, pants:0x1a1a1e, hair:null, hat:'knight', hatC:0x26262a, shoe:0x111111 };
+    case 'ninja': return rng() < 0.4
+      ? { skin, shirt:0x1a1a1e, pants:0x1a1a1e, hair:0x111111, hat:'headband', hatC:0x1a1a1e, shoe:0x111111, belt:0x111111 }
+      : { skin, shirt:0xf0f0ea, pants:0xf0f0ea, hair:pick([0x111111, 0x3a2a1a]), hat:pick(['headband', null]), hatC:0xf0f0ea, shoe:skin, belt:pick([0x111111, 0x8a5a2a, 0xd01818, 0x2a6ad0]) };
+    case 'sensei': return { skin:0xe0ac69, shirt:0x8a1a1a, pants:0x111111, hair:0xdddddd, beard:0xdddddd, shoe:0xe0ac69, belt:0x111111 };
+    case 'gangster': return { skin, shirt:pick([0x2a2a30, 0x3a3226, 0x1a1a22, 0x4a3a3a]), vest:pick([null, 0x111111]), pants:pick([0x2a2a30, 0x1a1a22]), hair:pick([0x111111, 0x3a2a1a]), beard:pick([null, null, 0x111111]), hat:'fedora', hatC:pick([0x2a2a2a, 0x4a3a2a, 0x3a3a3a]), shoe:0x111111, tie:pick([0xa01010, 0x1a1a6a, 0xd0d0d0]) };
+    case 'mobBoss': return { skin:0xe0ac69, shirt:0xe8e0d0, vest:0x3a2a1a, pants:0x2a2a2a, hair:0x222222, beard:null, hat:'fedora', hatC:0xe8e0d0, shoe:0x2a1a0e, tie:0x8a1010, shades:true };
+    case 'office': return { skin, shirt:pick([0xffffff, 0xc8d8f0, 0xe0e0e0, 0xf0e0d0, 0xd0e8d0]), pants:pick([0x2a2a3a, 0x3a3a40, 0x5a5048, 0x1a1a2a]), hair:pick([0x222222, 0x5a3a1a, 0xb08040, 0x888888, null]), beard:pick([null, null, 0x5a3a1a]), shoe:0x1a1a1a, tie:pick([null, 0xa01010, 0x1a3a8a, 0x2a6a2a]) };
+    case 'ceo': return { skin:0xffdbac, shirt:0x1a1a2a, vest:0x1a1a2a, pants:0x1a1a2a, hair:0xbbbbbb, shoe:0x111111, tie:0xd0a020 };
     case 'champion': return { skin:0xc68642, shirt:null, pants:0x8a1a1a, hair:0x222222, beard:0x222222, hat:'helmet', hatC:0xc9a23a, shoe:0x6b4423 };
-    default: return outfitFor(pick(['biker', 'disco', 'prison', 'cowboy', 'pirate']), rng);
+    default: return outfitFor(pick(['biker', 'disco', 'prison', 'cowboy', 'pirate', 'viking', 'medieval', 'ninja', 'gangster', 'office']), rng);
   }
 }
 

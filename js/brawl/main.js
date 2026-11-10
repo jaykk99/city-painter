@@ -726,7 +726,7 @@ function start(id){
   feed(TOUCH ? '✋ grab anything · 🎯 throw it · 🦵 kick' : 'E grab · Q throw · F kick · RMB block');
   if(!W.L.waves) setTimeout(() => { if(W && !W.brawl) feed('🍺 Everyone\'s calm… throw the first punch'); }, 1500);
   audio.crowd(true);
-  audio.music(W.musicOn, W.L.id === 'disco' ? 'disco' : W.L.id === 'saloon' ? 'piano' : 'rock');
+  audio.music(W.musicOn, W.L.id === 'disco' ? 'disco' : (W.L.id === 'saloon' || W.L.id === 'speakeasy') ? 'piano' : 'rock');
   if(!TOUCH) lockMouse();
 }
 function togglePause(force){

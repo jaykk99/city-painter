@@ -48,15 +48,36 @@ export const WEAPONS = {
   dumbbell:   { name:'Dumbbell',         kind:'melee', dmg:30, reach:1.6, rate:0.7,  knock:7,   sever:0,    sharp:false, heavy:true, dur:Infinity, model:M(0.3,0.04,0x555555,[0.14,0.14,0.14],0x222222) },
   baton:      { name:'Guard Baton',      kind:'melee', dmg:22, reach:1.8, rate:0.42, knock:5,   sever:0,    sharp:false, dur:Infinity, model:M(0.55,0.04,0x111111,[0.05,0.05,0.05],0x111111) },
   anchor:     { name:'Anchor',           kind:'melee', dmg:80, reach:2.2, rate:1.5,  knock:18,  sever:0.5,  sharp:false, heavy:true, crush:true, dur:Infinity, model:M(0.9,0.06,0x3a3a3a,[0.6,0.2,0.08],0x3a3a3a) },
+  // viking / medieval
+  battleaxe:  { name:'Battle Axe',       kind:'melee', dmg:58, reach:2.2, rate:0.95, knock:7,   sever:0.85, sharp:true,  heavy:true, dur:Infinity, model:M(0.9,0.05,0x6b4423,[0.05,0.3,0.34],0xbfbfbf) },
+  warhammer:  { name:'War Hammer',       kind:'melee', dmg:62, reach:2.1, rate:1.05, knock:13,  sever:0.3,  sharp:false, heavy:true, crush:true, dur:Infinity, model:M(0.85,0.045,0x5a3a1a,[0.14,0.14,0.26],0x6a6a6a) },
+  longsword:  { name:'Longsword',        kind:'melee', dmg:44, reach:2.3, rate:0.5,  knock:3,   sever:0.7,  sharp:true,  dur:Infinity, model:M(0.24,0.04,0x3a2010,[0.025,0.85,0.06],0xd8d8d8) },
+  mace:       { name:'Mace',             kind:'melee', dmg:38, reach:1.9, rate:0.7,  knock:8,   sever:0.1,  sharp:false, dur:Infinity, model:M(0.55,0.045,0x5a3a1a,[0.16,0.16,0.16],0x777777) },
+  flail:      { name:'Flail',            kind:'melee', dmg:42, reach:2.3, rate:0.8,  knock:9,   sever:0.15, sharp:false, dur:Infinity, model:M(0.45,0.04,0x5a3a1a,[0.15,0.15,0.15],0x555555) },
+  horn:       { name:'Mead Horn',        kind:'melee', dmg:15, reach:1.6, rate:0.45, knock:3,   sever:0,    sharp:false, dur:4, model:M(0.05,0.05,0xe8dcc0,[0.07,0.24,0.07],0xd8c8a0) },
+  goblet:     { name:'Goblet',           kind:'melee', dmg:16, reach:1.6, rate:0.45, knock:3,   sever:0,    sharp:false, dur:Infinity, model:M(0.1,0.03,0xc9a23a,[0.1,0.1,0.1],0xd8b44a) },
+  // dojo
+  nunchucks:  { name:'Nunchucks',        kind:'melee', dmg:22, reach:1.9, rate:0.26, knock:3,   sever:0,    sharp:false, dur:Infinity, model:M(0.3,0.04,0x2a1a10,[0.04,0.3,0.04],0x2a1a10) },
+  bostaff:    { name:'Bo Staff',         kind:'melee', dmg:26, reach:2.7, rate:0.45, knock:7,   sever:0,    sharp:false, dur:Infinity, model:M(1.6,0.04,0x8b6b4a,[0.05,0.06,0.05],0x6b4423) },
+  naginata:   { name:'Naginata',         kind:'melee', dmg:42, reach:2.9, rate:0.6,  knock:5,   sever:0.7,  sharp:true,  dur:Infinity, model:M(1.4,0.04,0x2a1a10,[0.02,0.4,0.06],0xd8d8d8) },
+  // speakeasy / office
+  golfclub:   { name:'Golf Club',        kind:'melee', dmg:30, reach:2.1, rate:0.6,  knock:8,   sever:0.05, sharp:false, dur:Infinity, model:M(0.9,0.025,0x888888,[0.06,0.05,0.14],0xbfbfbf) },
+  keyboard:   { name:'Keyboard',         kind:'melee', dmg:18, reach:1.8, rate:0.5,  knock:4,   sever:0,    sharp:false, dur:3, breaksInto:'stoolleg', model:M(0.02,0.04,0x222222,[0.45,0.04,0.15],0x2a2a2a) },
+  monitor:    { name:'Monitor',          kind:'melee', dmg:34, reach:1.7, rate:0.95, knock:9,   sever:0,    sharp:false, heavy:true, shatter:true, dur:2, model:M(0.02,0.04,0x222222,[0.5,0.32,0.08],0x1a1a1a,{ glass:false }) },
+  extinguisher:{ name:'Fire Extinguisher',kind:'melee', dmg:36, reach:1.8, rate:0.85, knock:10, sever:0,    sharp:false, heavy:true, dur:Infinity, model:M(0.08,0.04,0x222222,[0.14,0.45,0.14],0xd01818) },
+  officechair:{ name:'Office Chair',     kind:'melee', dmg:30, reach:2.0, rate:1.0,  knock:10,  sever:0,    sharp:false, heavy:true, dur:3, breaksInto:'stoolleg', model:M(0.5,0.05,0x333333,[0.45,0.5,0.1],0x222244) },
   // guns
   revolver:   { name:'Revolver',         kind:'gun', dmg:55, rate:0.45, knock:6,  sever:0.4,  ammo:6,  pellets:1, spread:0.01, range:60, model:M(0.12,0.04,0x4a2a14,[0.04,0.06,0.26],0x7a7a7a) },
   shotgun:    { name:'Double Barrel',    kind:'gun', dmg:16, rate:0.9,  knock:4,  sever:0.35, ammo:2,  pellets:9, spread:0.12, range:25, model:M(0.3,0.05,0x6b4423,[0.07,0.06,0.7],0x444444) },
   flintlock:  { name:'Flintlock Pistol', kind:'gun', dmg:70, rate:1.4,  knock:9,  sever:0.5,  ammo:1,  pellets:1, spread:0.03, range:40, model:M(0.14,0.05,0x6b4423,[0.04,0.05,0.34],0x8a7a50) },
   rifle:      { name:'Lever Rifle',      kind:'gun', dmg:60, rate:0.75, knock:7,  sever:0.45, ammo:8,  pellets:1, spread:0.005,range:80, model:M(0.35,0.05,0x6b4423,[0.04,0.05,0.8],0x555555) },
+  crossbow:   { name:'Crossbow',         kind:'gun', dmg:65, rate:1.2,  knock:8,  sever:0.6,  ammo:5,  pellets:1, spread:0.01, range:50, model:M(0.3,0.05,0x6b4423,[0.4,0.06,0.5],0x5a3a1a) },
   tommy:      { name:'Tommy Gun',        kind:'gun', dmg:20, rate:0.09, knock:2,  sever:0.15, ammo:40, pellets:1, spread:0.05, range:45, model:M(0.3,0.06,0x5a3a1a,[0.08,0.12,0.6],0x333333) },
   // throwables
   dynamite:   { name:'Dynamite',         kind:'throw', dmg:0, rate:0.8, knock:0, sever:0, tdmg:90, explode:4.5, fuse:1.6, count:3, model:M(0.02,0.04,0xb02020,[0.05,0.2,0.05],0xd02a2a) },
   tknives:    { name:'Throwing Knives',  kind:'throw', dmg:0, rate:0.35, knock:0, sever:0, tdmg:34, tsever:0.4, count:6, model:M(0.08,0.03,0x222222,[0.02,0.16,0.015],0xdedede) },
+  kunai:      { name:'Kunai',            kind:'throw', dmg:0, rate:0.3, knock:0, sever:0, tdmg:36, tsever:0.45, count:8, model:M(0.08,0.025,0x222222,[0.025,0.18,0.012],0x9a9a9a) },
+  throwaxe:   { name:'Throwing Axe',     kind:'throw', dmg:0, rate:0.6, knock:0, sever:0, tdmg:55, tsever:0.6, tknock:6, count:3, model:M(0.35,0.035,0x6b4423,[0.04,0.14,0.16],0xbfbfbf) },
   cannonball: { name:'Cannonball',       kind:'throw', dmg:0, rate:1.0, knock:0, sever:0, tdmg:70, tknock:16, count:1, model:M(0.01,0.01,0x222222,[0.22,0.22,0.22],0x1a1a1a) },
 };
 

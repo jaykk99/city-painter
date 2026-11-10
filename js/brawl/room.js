@@ -24,6 +24,22 @@ function floorTexture(f){
       for(let k = 0; k < 400; k++){ g.fillStyle = jitter(f.c2, 0.8 + Math.random() * 0.4); g.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
       g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, 0, 128, 1); g.fillRect(0, 0, 1, 128);
       break;
+    case 'tatami':
+      for(let x = 0; x < 2; x++) for(let y = 0; y < 4; y++){ g.fillStyle = hex((x + y) % 2 ? f.c1 : f.c2); g.fillRect(x * 64, y * 32, 64, 32); g.fillStyle = 'rgba(40,30,10,.5)'; g.fillRect(x * 64, y * 32, 64, 2); g.fillRect(x * 64, y * 32, 2, 32); }
+      for(let k = 0; k < 300; k++){ g.fillStyle = 'rgba(0,0,0,.06)'; g.fillRect(Math.random() * 128, Math.random() * 128, 1, 3); }
+      break;
+    case 'carpet':
+      g.fillStyle = hex(f.c1); g.fillRect(0, 0, 128, 128);
+      for(let k = 0; k < 900; k++){ g.fillStyle = jitter(f.c2, 0.8 + Math.random() * 0.4); g.fillRect(Math.random() * 128, Math.random() * 128, 1, 1); }
+      g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(0, 0, 128, 1); g.fillRect(0, 0, 1, 128);
+      break;
+    case 'stone':
+      for(let y = 0; y < 4; y++) for(let x = 0; x < 4; x++){ g.fillStyle = jitter((x + y) % 2 ? f.c1 : f.c2, 0.9 + Math.random() * 0.2); g.fillRect(x * 32 + (y % 2) * 16, y * 32, 31, 31); }
+      g.fillStyle = 'rgba(0,0,0,.35)'; for(let y = 0; y < 4; y++) g.fillRect(0, y * 32, 128, 1);
+      break;
+    case 'checker':
+      for(let x = 0; x < 4; x++) for(let y = 0; y < 4; y++){ g.fillStyle = hex((x + y) % 2 ? f.c1 : f.c2); g.fillRect(x * 32, y * 32, 32, 32); }
+      break;
     case 'sand':
       g.fillStyle = hex(f.c1); g.fillRect(0, 0, 128, 128);
       for(let k = 0; k < 700; k++){ g.fillStyle = jitter(f.c2, 0.85 + Math.random() * 0.3); g.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
