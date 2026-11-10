@@ -4,7 +4,7 @@
 // and take the whole room apart — limbs, heads and all.
 import * as THREE from 'three';
 import { initOrientation } from '../orientation.js';
-import { SCENARIOS, getScenario, spawnPoints, groundAt, outfitFor, pickWeighted } from './maps.js';
+import { SCENARIOS, getScenario, spawnPoints, groundAt, outfitFor, pickWeighted, blocked } from './maps.js';
 import { wdef, resolveHit, wear } from './weapons.js';
 import { buildRoom } from './room.js';
 import { createFX } from './fx.js';
@@ -52,33 +52,66 @@ function newWorld(id){
     woundMat:new THREE.MeshLambertMaterial({ color:0x9a0808 }),
     spawnPts:spawnPoints(L, 18), spawnT:1.2, bossSpawned:false, boss:null, done:false, hitstop:0, shake:0,
     targets(){ return this.fighters.concat([player]); },
-    hit, hurtPlayer, shoot, explode, onKill, announce,
+    hit, hurtPlayer, shoot, explode, onKill, announce, alarm, onBrawl, brawl:false, spreadT:1,
   };
   for(const p of L.pickups){ const it = new Item(W, p.w, p.x, p.y || 0, p.z); W.items.push(it); }
   player.pos.set(L.player[0], 0, L.player[1]); player.vel.set(0, 0, 0);
   player.yaw = L.player[2]; player.pitch = 0; player.hp = 100; player.alive = true;
   player.weapon = null; player.wstate = { used:0 }; player.rage = 0; player.raging = 0; player.cool = 0; player.pending = null;
   setHeld(null);
-  if(L.waves){ W.stats.wave = 0; nextWave(); }
+  if(L.waves){ W.stats.wave = 0; W.brawl = true; nextWave(); }
   W.remaining = L.waves ? 0 : L.enemies.count;
-  // a few start the fight already in the room
-  const startN = Math.min(L.waves ? 0 : 4, W.remaining);
-  for(let i = 0; i < startN; i++) spawnEnemy(true);
+  // the bar starts calm and full: drinkers, dancers, pool players, whoever's on the music.
+  // Nobody fights until you start it (more pour in once it's kicked off)
+  if(!L.waves){
+    const n = Math.min(W.remaining, L.enemies.maxActive + 4);
+    for(let i = 0; i < n; i++){
+      const p = freeSpot(L, 3.5);
+      const act = L.id === 'disco' && Math.hypot(p[0], p[1]) < 6 ? 'dance' : Math.random() < 0.5 ? 'drink' : 'idle';
+      spawnEnemy(false, p, act);
+    }
+    if(L.musician){ const m = W.fighters[0]; if(m){ m.pos.set(L.musician[0], 0, L.musician[1]); m.home.copy(m.pos); m.activity = 'music'; m.yaw = L.musician[2] || 0; m.role = 'music'; W.musician = m; W.musicOn = true; } }
+  }
+}
+function freeSpot(L, minFromPlayer){
+  for(let k = 0; k < 60; k++){
+    const x = (Math.random() - 0.5) * (L.w - 2.4), z = (Math.random() - 0.5) * (L.d - 2.4);
+    if(blocked(L, x, z, 0.55)) continue;
+    if(Math.hypot(x - L.player[0], z - L.player[1]) < minFromPlayer) continue;
+    if(W && W.fighters.some(f => Math.hypot(f.pos.x - x, f.pos.z - z) < 1)) continue;
+    return [x, z];
+  }
+  return W.spawnPts[(Math.random() * W.spawnPts.length) | 0];
+}
+// violence nearby: calm people around it decide to join in over the next second or two
+function alarm(pos, by, r = 7){
+  for(const f of W.fighters){
+    if(!f.calm || !f.alive) continue;
+    const d = Math.hypot(f.pos.x - pos.x, f.pos.z - pos.z);
+    if(d < r) f.provoke(Math.random() < 0.6 ? by : null, 0.25 + Math.random() * 1.4 + d * 0.08);
+  }
+  onBrawl();
+}
+function onBrawl(f){
+  if(W.brawl) return;
+  W.brawl = true; W.spawnT = 3;
+  announce('BAR FIGHT!', 1.4); audio.bell();
 }
 
 const rng = Math.random;
-function spawnEnemy(inside){
+function spawnEnemy(inside, at, activity){
   const L = W.L;
-  let pt = null;
-  for(let k = 0; k < 10; k++){
+  let pt = at || null;
+  for(let k = 0; k < 10 && !pt; k++){
     const p = W.spawnPts[(Math.random() * W.spawnPts.length) | 0];
     if(Math.hypot(p[0] - player.pos.x, p[1] - player.pos.z) > (inside ? 5 : 6)){ pt = p; break; }
   }
   if(!pt) pt = W.spawnPts[0];
   const o = outfitFor(L.enemies.outfits, rng);
   const wpn = pickWeighted(L.enemies.weapons, rng);
-  const f = new Fighter(W, o, wpn === 'fists' ? null : wpn, pt[0], pt[1], { hp:L.waves ? 1 + W.stats.wave * 0.06 : 1 });
-  f.yaw = Math.atan2(player.pos.x - f.pos.x, player.pos.z - f.pos.z);
+  const hostile = !activity;   // reinforcements and arena waves come in swinging
+  const f = new Fighter(W, o, wpn === 'fists' ? null : wpn, pt[0], pt[1], { hp:L.waves ? 1 + W.stats.wave * 0.06 : 1, hostile, activity });
+  f.yaw = hostile ? Math.atan2(player.pos.x - f.pos.x, player.pos.z - f.pos.z) : Math.random() * 6.28;
   W.fighters.push(f); W.stats.spawned++;
   if(!L.waves) W.remaining--;
   return f;
@@ -86,7 +119,7 @@ function spawnEnemy(inside){
 function spawnBoss(){
   const L = W.L, b = L.boss;
   const p = W.spawnPts.reduce((a, c) => Math.hypot(c[0] - player.pos.x, c[1] - player.pos.z) > Math.hypot(a[0] - player.pos.x, a[1] - player.pos.z) ? c : a);
-  const f = new Fighter(W, outfitFor(b.outfit, rng), b.weapon, p[0], p[1], { scale:b.scale, hp:b.hp, boss:true, name:b.name, aggro:1 });
+  const f = new Fighter(W, outfitFor(b.outfit, rng), b.weapon, p[0], p[1], { scale:b.scale, hp:b.hp, boss:true, name:b.name, aggro:1, hostile:true });
   W.fighters.push(f); W.boss = f; W.bossSpawned = true;
   announce(b.name + '!', 1.8); audio.bell();
 }
@@ -187,6 +220,7 @@ function shoot(o, dir, w, shooter, extra = 0){
 }
 function explode(pos, R, dmg, owner){
   audio.boom(); W.shake = 0.7;
+  alarm(pos, owner, 12);
   const fx = W.fx;
   for(let k = 0; k < 70; k++){ const a = Math.random() * 6.28, s = 3 + Math.random() * 7; fx.gib(pos.x, pos.y + 0.3, pos.z, Math.cos(a) * s, 2 + Math.random() * 6, Math.sin(a) * s, [0xff8a1a, 0xffd040, 0x333333, 0x222222][k & 3], false, 1.2); }
   for(let k = 0; k < 5; k++) fx.splat(pos.x + (Math.random() - 0.5) * 2, groundAt(W.L, pos.x, pos.z, pos.y + 0.5), pos.z + (Math.random() - 0.5) * 2, 0, 1, 0, 1 + Math.random());
@@ -261,6 +295,7 @@ function attack(){
     player.cool = w.rate; player.wstate.ammo--;
     const o = camera.getWorldPosition(new THREE.Vector3()); camForward(fwd);
     shoot(o, fwd, w, player, player.vel.lengthSq() > 2 ? 0.03 : 0);
+    alarm(player.pos, player, 14);   // a gunshot gets everyone's attention
     vm.recoil = 1; W.shake = Math.max(W.shake, 0.15);
     return;
   }
@@ -429,12 +464,17 @@ function frame(now){
       if(W.waveLeft > 0 && alive < L.enemies.maxActive){ spawnEnemy(); W.waveLeft--; }
       else if(W.waveLeft <= 0 && W.bossWave && !W.bossSpawned){ spawnBoss(); }
       else if(W.waveLeft <= 0 && alive === 0){ nextWave(); W.spawnT = 2.5; player.hp = Math.min(100, player.hp + 25); }
-    } else {
-      if(W.remaining > 0 && alive < L.enemies.maxActive) spawnEnemy();
+    } else if(W.brawl){
+      // the calm ones still standing around get pulled in, one by one
+      W.spreadT -= 1;
+      if(W.spreadT <= 0){ W.spreadT = 1; for(const f of W.fighters) if(f.calm && f.alive && Math.random() < 0.12) f.provoke(null, 0.2 + Math.random()); }
+      const fighting = W.fighters.filter(f => f.alive && !f.calm).length;
+      if(W.remaining > 0 && fighting < L.enemies.maxActive) spawnEnemy();
       else if(W.remaining <= 0 && alive === 0 && !W.bossSpawned) spawnBoss();
       else if(W.bossSpawned && !W.boss.alive && alive === 0){ W.done = true; announce('TOWN PAINTED RED', 2.5); audio.bell(); setTimeout(() => endRun(true), 2600); }
     }
   }
+  if(W.musicOn && W.musician && (!W.musician.alive || !W.musician.calm)){ W.musicOn = false; audio.music(false); feed('🎵 …the music stopped'); }
   for(const f of W.fighters) f.update(dt);
   separate();
   for(const it of W.items) if(it.alive) it.update(dt);
@@ -519,7 +559,7 @@ function separate(){
     for(const [m, o, s] of [[a, b, 1], [b, a, -1]]){
       if(m.isPlayer || !m.flying || o.isPlayer) continue;
       const sp = Math.hypot(m.vel.x, m.vel.z);
-      if(sp > 5 && o.state !== 'down'){ o.knockDown({ x:nx * s, z:nz * s }, sp * 0.7); W.audio.thud(1); m.vel.multiplyScalar(0.5); }
+      if(sp > 5 && o.state !== 'down'){ o.provoke(m.lastHitBy); o.knockDown({ x:nx * s, z:nz * s }, sp * 0.7); W.audio.thud(1); m.vel.multiplyScalar(0.5); }
     }
   }
 }
@@ -601,7 +641,9 @@ function start(id){
   running = true; paused = false;
   announce(W.L.name.toUpperCase(), 1.6);
   feed(TOUCH ? '✋ grab anything · 🎯 throw it · 🦵 kick' : 'E grab · Q throw · F kick · RMB block');
+  if(!W.L.waves) setTimeout(() => { if(W && !W.brawl) feed('🍺 Everyone\'s calm… throw the first punch'); }, 1500);
   audio.crowd(true);
+  audio.music(W.musicOn, W.L.id === 'disco' ? 'disco' : W.L.id === 'saloon' ? 'piano' : 'rock');
   if(!TOUCH) lockMouse();
 }
 function togglePause(force){
@@ -613,7 +655,7 @@ function togglePause(force){
 function endRun(win){
   if(!running) return;
   running = false;
-  audio.crowd(false);
+  audio.crowd(false); audio.music(false);
   if(document.exitPointerLock) document.exitPointerLock();
   const s = W.stats, L = W.L;
   const cash = s.kills * 120 + s.limbs * 30 + s.heads * 60 + s.exploded * 80 + (win ? 2500 : 0) + (L.waves ? s.wave * 400 : 0);
@@ -629,7 +671,7 @@ function endRun(win){
 }
 $('p-resume').onclick = () => togglePause();
 $('p-restart').onclick = () => { togglePause(); start(scenId); };
-$('p-menu').onclick = () => { running = false; audio.crowd(false); $('pause').classList.add('hidden'); $('hud').classList.add('hidden'); $('touch').classList.add('hidden'); buildMenu(); $('menu').classList.remove('hidden'); };
+$('p-menu').onclick = () => { running = false; audio.crowd(false); audio.music(false); $('pause').classList.add('hidden'); $('hud').classList.add('hidden'); $('touch').classList.add('hidden'); buildMenu(); $('menu').classList.remove('hidden'); };
 $('pause-btn').addEventListener('pointerdown', e => { e.stopPropagation(); togglePause(); });
 $('r-again').onclick = () => start(scenId);
 $('r-menu').onclick = () => { $('result').classList.add('hidden'); buildMenu(); $('menu').classList.remove('hidden'); };

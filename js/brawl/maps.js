@@ -73,7 +73,7 @@ function bikerBar(){
   const L = { id:'biker', name:'Biker Bar', blurb:'Leather, beer and broken bottles. The Hellhounds want you out.',
     w:24, d:18, h:4.2, floor:{ c1:0x4a3020, c2:0x3e281a, kind:'planks' }, wall:0x5a2a1e, trim:0x2a1208, ceil:0x1a120c,
     light:0xffb060, ambient:0x5a4030, fog:0x1a100a, lamps:[[-6, -3], [0, 0], [6, 3], [-6, 5], [6, -5]],
-    player:[0, 7, 0], solids:[], deco:[], pickups:[],
+    player:[0, 7, 0], musician:[10.6, 6.6, 0], solids:[], deco:[], pickups:[],
     enemies:{ count:18, maxActive:9, outfits:'biker', weapons:{ fists:4, bottle:3, chain:2, knuckles:2, bat:1, knife:1, wrench:1 } },
     boss:{ name:'BIG MIKE', outfit:'bikerBoss', weapon:'sledge', scale:1.35, hp:3.2 } };
   merge(L, barCounter(-4, -6, 9, true));
@@ -92,7 +92,7 @@ function disco(){
   const L = { id:'disco', name:'Disco', blurb:'Saturday night fever. Everyone on the floor wants a piece of you.',
     w:22, d:22, h:5, floor:{ c1:0xff2a7a, c2:0x2a8aff, c3:0xffd23f, c4:0x30e070, kind:'disco' }, wall:0x2a1040, trim:0x6a20a0, ceil:0x0a0418,
     light:0xff60d0, ambient:0x402060, fog:0x0a0418, lamps:[[-5, -5], [5, -5], [-5, 5], [5, 5]], discoBall:true,
-    player:[0, 8, 0], solids:[], deco:[], pickups:[],
+    player:[0, 8, 0], musician:[0, -8.6, Math.PI], solids:[], deco:[], pickups:[],
     enemies:{ count:20, maxActive:10, outfits:'disco', weapons:{ fists:5, bottle:2, mug:1, micstand:1, knife:1, guitar:1 } },
     boss:{ name:'DISCO KING', outfit:'discoBoss', weapon:'katana', scale:1.25, hp:3 } };
   // DJ booth + stage
@@ -135,7 +135,7 @@ function saloon(){
   const L = { id:'saloon', name:'Western Saloon', blurb:'This town ain\'t big enough. Draw, partner.',
     w:24, d:20, h:4.6, floor:{ c1:0x9a6a3a, c2:0x8a5c30, kind:'planks' }, wall:0x7a4a26, trim:0x4a2a12, ceil:0x3a2412,
     light:0xffc070, ambient:0x6a4a2a, fog:0x2a1a0e, lamps:[[-6, -4], [6, -4], [0, 2], [-6, 6], [6, 6]],
-    player:[0, 8, 0], solids:[], deco:[], pickups:[],
+    player:[0, 8, 0], musician:[9.6, 6.6, 0], solids:[], deco:[], pickups:[],
     enemies:{ count:18, maxActive:9, outfits:'cowboy', weapons:{ fists:4, bottle:3, revolver:2, knife:1, pitchfork:1, shovel:1, rifle:1 } },
     boss:{ name:'THE SHERIFF', outfit:'sheriff', weapon:'rifle', scale:1.25, hp:3 } };
   merge(L, barCounter(-9.6, -1, 12, false, 0x6a3a1a, 0x4a2410));

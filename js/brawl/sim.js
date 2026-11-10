@@ -116,6 +116,10 @@ export class Fighter {
     this.state = 'idle'; this.t = 0; this.cool = 0.5 + Math.random(); this.think = 0; this.target = null; this.goal = null;
     this.down = 0; this.tilt = 0; this.spinY = 0; this.walk = Math.random() * 6; this.stun = 0; this.lastHitBy = null;
     this.weapon = null; this.wstate = { used:0 }; this.heldMesh = null;
+    // like the real game, the room starts calm: people drink, dance and play pool
+    // until you throw the first punch, then the brawl spreads
+    this.calm = !opts.hostile; this.activity = opts.activity || 'idle';
+    this.home = new THREE.Vector3(x, 0, z); this.wander = null; this.idleT = Math.random() * 4; this.joinT = null; this.joinBy = null;
     this.aggro = opts.aggro ?? (0.65 + Math.random() * 0.3);   // chance a fighter goes for you rather than a neighbour
     this.speed = (2.6 + Math.random() * 1.0) * (this.boss ? 0.85 : 1);
     this.giveWeapon(weaponId);
@@ -149,8 +153,36 @@ export class Fighter {
   get crawling(){ return this.missing.legL && this.missing.legR; }
 
   // ---- getting hurt ----
+  // start fighting (now, or after `delay` seconds — a witness deciding to join in)
+  provoke(by, delay = 0){
+    if(!this.calm || !this.alive) return;
+    if(delay > 0){ if(this.joinT == null || delay < this.joinT){ this.joinT = delay; this.joinBy = by; } return; }
+    this.calm = false; this.joinT = null; this.wander = null;
+    this.target = by && by !== this && (by.isPlayer ? by.alive : by.alive) ? by : this.pickTarget();
+    this.cool = Math.min(this.cool, 0.3 + Math.random() * 0.5);
+    this.W.onBrawl(this);
+  }
+  calmStep(dt){
+    if(this.joinT != null){ this.joinT -= dt; if(this.joinT <= 0) this.provoke(this.joinBy); return [0, 0]; }
+    if(this.activity === 'dance') { this.yaw += Math.sin(this.walk * 0.3) * dt * 0.6; return [0, 0]; }
+    if(this.wander){
+      const dx = this.wander.x - this.pos.x, dz = this.wander.z - this.pos.z, d = Math.hypot(dx, dz);
+      if(d < 0.3){ this.wander = null; this.idleT = 3 + Math.random() * 7; return [0, 0]; }
+      this.yaw += (Math.atan2(dx, dz) - this.yaw + Math.PI * 3) % (Math.PI * 2) - Math.PI > 0 ? dt * 3 : -dt * 3;
+      return [dx / d * 0.32, dz / d * 0.32];
+    }
+    this.idleT -= dt;
+    if(this.idleT <= 0 && this.activity !== 'music'){
+      const a = Math.random() * Math.PI * 2, r = 0.8 + Math.random() * 2.2;
+      this.wander = { x:this.home.x + Math.cos(a) * r, z:this.home.z + Math.sin(a) * r };
+      if(Math.abs(this.wander.x) > this.W.L.w / 2 - 0.6 || Math.abs(this.wander.z) > this.W.L.d / 2 - 0.6) this.wander = null;
+      this.idleT = 2 + Math.random() * 5;
+    }
+    return [0, 0];
+  }
   takeHit(part, res, dir, knock, attacker, w){
     const W = this.W;
+    if(this.calm && this.alive){ this.provoke(attacker); W.alarm(this.pos, attacker); }
     this.lastHitBy = attacker || this.lastHitBy;
     if(attacker && !attacker.isPlayer && attacker !== this && Math.random() < 0.7) this.target = attacker;   // grudges start brawls
     else if(attacker && attacker.isPlayer) this.target = attacker;
@@ -262,6 +294,7 @@ export class Fighter {
   // ---- brain ----
   pickTarget(){
     const W = this.W, me = this;
+    if(this.calm) return null;
     const others = W.fighters.filter(f => f !== me && f.alive);
     if(W.player.alive && (Math.random() < this.aggro || !others.length || this.boss)) return W.player;
     let best = null, bd = 1e9;
@@ -279,6 +312,9 @@ export class Fighter {
         this.down -= dt;
         this.tilt = Math.min(1, this.tilt + dt * 5);
         if(this.down <= 0 && onGround){ this.state = 'idle'; }
+      } else if(this.calm){
+        this.tilt = Math.max(0, this.tilt - dt * 3);
+        const m = this.calmStep(dt); wantX = m[0]; wantZ = m[1];
       } else {
         this.tilt = Math.max(0, this.tilt - dt * 3);
         if(this.think <= 0){
@@ -426,7 +462,15 @@ export class Fighter {
     let ar = sw * 0.8;
     if(this.state === 'windup') ar = this.w.kind === 'gun' ? -1.5 : -2.6;
     if(this.swing > 0){ this.swing -= dt; ar = -2.6 + (1 - this.swing / 0.25) * 3.3; }
-    if(this.alive && this.w.kind === 'gun' && this.state !== 'down') ar = Math.min(ar, -1.4);
+    if(this.alive && this.w.kind === 'gun' && this.state !== 'down' && !this.calm) ar = Math.min(ar, -1.4);
+    let dance = 0;
+    if(this.alive && this.calm){
+      const tt = performance.now() / 1000 + this.id;
+      if(this.activity === 'dance'){ dance = Math.abs(Math.sin(tt * 4)) * 0.06; ar = -2.4 + Math.sin(tt * 4) * 0.5; if(!this.missing.armL) P.armL.rotation.x = -2.4 - Math.sin(tt * 4) * 0.5; P.legL.rotation.x = Math.sin(tt * 4) * 0.25; P.legR.rotation.x = -Math.sin(tt * 4) * 0.25; }
+      else if(this.activity === 'music'){ ar = -0.9 + Math.sin(tt * 8) * 0.25; if(!this.missing.armL) P.armL.rotation.x = -0.9 - Math.sin(tt * 8) * 0.25; }
+      else if(this.activity === 'drink' && Math.sin(tt * 0.7) > 0.75) ar = -2.3;   // a swig
+    }
+    this.danceY = dance;
     if(!this.missing.armR) P.armR.rotation.x = ar;
     P.torso.rotation.x = this.state === 'stagger' ? -0.3 : this.state === 'windup' ? -0.15 : 0;
     P.head.rotation.x = P.torso.rotation.x;
@@ -439,6 +483,7 @@ export class Fighter {
     if(this.gone) return;
     const g = this.group;
     g.position.copy(this.pos);
+    if(this.danceY) g.position.y += this.danceY;
     g.rotation.set(0, this.yaw, 0);
     if(this.tilt > 0){
       // topple onto the back (knockdown) or either side (corpse)

@@ -41,6 +41,22 @@ export function createBrawlAudio(){
     hurt(){ tone(220, 0.15, 'sawtooth', 0.15, 0, 120); },
     rage(){ tone(80, 1.2, 'sawtooth', 0.35, 0, 160); noise(0.8, 'bandpass', 300, 1, 0.5, 0, 1200); },
     bell(){ for(let k = 0; k < 3; k++) tone(660, 0.6, 'triangle', 0.25, k * 0.25); },
+    // a little procedural groove for the jukebox / DJ / piano — stops when the musician gets hit
+    music(on, style = 'rock'){
+      if(!ctx) return;
+      if(this._mus){ clearInterval(this._mus); this._mus = null; }
+      if(!on) return;
+      const bpm = style === 'disco' ? 120 : style === 'piano' ? 100 : 96, beat = 60 / bpm;
+      const bass = style === 'disco' ? [55, 55, 82.4, 55, 73.4, 55, 82.4, 98] : style === 'piano' ? [130.8, 164.8, 196, 164.8, 146.8, 174.6, 220, 174.6] : [41.2, 41.2, 55, 41.2, 49, 49, 55, 61.7];
+      let step = 0;
+      const tick = () => {
+        const i = step++ % 8;
+        if(style !== 'piano'){ tone(60, 0.18, 'sine', i % 2 === 0 ? 0.5 : 0.15, 0, 35); if(i % 4 === 2) noise(0.12, 'bandpass', 1800, 1, 0.18); noise(0.03, 'highpass', 7000, 1, style === 'disco' ? 0.12 : 0.05); }
+        tone(bass[i], beat * 0.9, style === 'piano' ? 'triangle' : 'sawtooth', style === 'piano' ? 0.12 : 0.07);
+        if(style === 'piano' && i % 2 === 0) tone(bass[i] * 2, beat * 0.5, 'triangle', 0.06, beat * 0.25);
+      };
+      tick(); this._mus = setInterval(tick, beat * 500);
+    },
     crowd(on){
       if(!ctx) return;
       if(on && !crowd){

@@ -12,6 +12,9 @@ First-person voxel bar brawler for phone and PC, in the style of *Paint the Town
 - **Pirate Cove** — boss: Captain Redbeard
 - **Arena** — endless waves, a boss every 5th wave, every weapon on the rack
 
+## How a fight starts
+Like the real game, every bar starts **calm**: people drink, dance and play pool, and someone's on the jukebox / DJ booth / piano. Nobody touches you until you throw the first punch (or fire a shot, or light dynamite). Then everyone nearby piles in, the brawl spreads across the room, more people pour in through the doors, and if you hit whoever's running the music, the music stops. The Arena is the exception: waves come in swinging.
+
 ## Gore physics
 Everyone is made of voxels and comes apart. Blades sever arms, legs and heads (rigid debris that tumbles and bounces); sledgehammers, the anchor and dynamite pulp bodies into cubes; blood splats floors and walls; corpses ragdoll and can be mutilated; kicked bodies fly, slam walls and bowl people over.
 
