@@ -81,3 +81,27 @@ h2{font-size:38px;font-weight:900;color:#ff2030;text-shadow:3px 3px 0 #000;lette
 .seg{display:flex;gap:6px}
 .seg button{background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.25);color:#fff;font-weight:800;padding:6px 12px;border-radius:8px;font-family:inherit}
 .seg button.on{background:#c01020;border-color:#ff6070}
+
+#dmg-dir{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none;opacity:0}
+#dmg-dir i{position:absolute;left:-70px;top:-150px;width:140px;height:34px;border-radius:50% 50% 0 0/100% 100% 0 0;background:radial-gradient(ellipse at 50% 100%,rgba(255,20,30,.9),rgba(255,20,30,0) 70%)}
+#dmg-dir.on{animation:dmgdir .9s ease-out}
+@keyframes dmgdir{0%{opacity:1}100%{opacity:0}}
+#slowbars{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 0 #000;transition:box-shadow .15s}
+body.slowmo #slowbars{box-shadow:inset 0 34px 0 0 #000,inset 0 -34px 0 0 #000}
+body.slowmo #game{filter:saturate(1.5) contrast(1.1)}
+#powers{position:absolute;left:14px;top:calc(62px + env(safe-area-inset-top));display:flex;flex-direction:column;gap:2px;font-size:11px;font-weight:800;letter-spacing:.5px;text-shadow:0 1px 3px #000}
+#powers span{opacity:.3}#powers span.on{opacity:1;color:#ffd23f}
+#b-dash{right:calc(258px + env(safe-area-inset-right));bottom:calc(112px + env(safe-area-inset-bottom));width:52px;height:52px;font-size:22px}
+#b-shock{right:calc(262px + env(safe-area-inset-right));bottom:calc(176px + env(safe-area-inset-bottom))}
+#b-smite{right:calc(130px + env(safe-area-inset-right));bottom:calc(174px + env(safe-area-inset-bottom))}
+.tbtn.pow{border-color:#ffd23f;box-shadow:0 0 12px rgba(255,200,40,.7)}
+#mut-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;font-size:11px;font-weight:800;letter-spacing:1px}
+#mut-row>span{opacity:.6}#mut-mult{color:#ffd23f}
+#mut-list{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.mut{background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.2);color:#fff;font-weight:800;font-size:11px;padding:5px 9px;border-radius:14px;font-family:inherit}
+.mut.on{background:#c01020;border-color:#ff6070}
+.scen{position:relative}.scen .stars{position:absolute;right:8px;top:6px;font-style:normal;color:#ffd23f;font-size:13px;letter-spacing:1px}
+#r-stars{display:flex;gap:14px;font-weight:800;font-size:14px;opacity:.9}#r-stars span{opacity:.45}#r-stars span.got{opacity:1;color:#ffd23f}
+#screen-blood i.fade{margin-top:150px!important;height:260px!important}
+.scen b{padding-right:48px}
+@media (max-height:520px){ #menu{justify-content:flex-start} #scen-list{grid-template-columns:repeat(4,minmax(130px,190px))} }

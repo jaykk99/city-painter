@@ -7,8 +7,8 @@ import { initOrientation } from '../orientation.js';
 import { SCENARIOS, getScenario, spawnPoints, groundAt, outfitFor, pickWeighted, blocked } from './maps.js';
 import { wdef, resolveHit, wear } from './weapons.js';
 import { buildRoom } from './room.js';
-import { createFX } from './fx.js';
-import { Fighter, Item, partFromHit } from './sim.js';
+import { createFX, setFxGravity } from './fx.js';
+import { Fighter, Item, partFromHit, setSimGravity } from './sim.js';
 import { buildFist, buildWeaponModel, V } from './voxel.js';
 import { createBrawlAudio } from './audio.js';
 
@@ -17,6 +17,10 @@ const TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
 if(TOUCH) document.body.classList.add('touch');
 const SAVE_KEY = 'citydriver_save_v1', BEST_KEY = 'citydriver_brawl_best', SET_KEY = 'citypainter_settings';
 const settings = Object.assign({ sens:1, fov:78, gore:1, quality:TOUCH ? 0 : 1 }, (() => { try{ return JSON.parse(localStorage.getItem(SET_KEY)) || {}; }catch(e){ return {}; } })());
+if(!settings.mut) settings.mut = {};
+const MUTS = [['bigheads', '🎈 BIG HEADS', 1], ['lowgrav', '🌙 LOW GRAVITY', 1], ['explosive', '💥 EXPLODING KILLS', 0.6], ['onepunch', '👊 ONE PUNCH', 0.3], ['hardcore', '☠ HARDCORE', 2]];
+const scoreMult = () => MUTS.reduce((m, [k, , x]) => settings.mut[k] ? m * x : m, 1);
+let GRAV = 18;
 function saveSettings(){ try{ localStorage.setItem(SET_KEY, JSON.stringify(settings)); }catch(e){} }
 const EYE = 1.62, P_RADIUS = 0.34;
 
@@ -37,13 +41,16 @@ let W = null, room = null, running = false, paused = false, scenId = 'biker';
 const player = {
   isPlayer:true, pos:new THREE.Vector3(), vel:new THREE.Vector3(), yaw:0, pitch:0, hp:100, alive:true,
   radius:P_RADIUS, height:1.8, scale:1, missing:{}, weapon:null, wstate:{ used:0 }, cool:0, kickCool:0, block:false,
-  rage:0, raging:0, punchSide:0, onGround:true, pending:null,
+  rage:0, raging:0, punchSide:0, onGround:true, pending:null, dashCd:0, dashT:0, iframes:0, bloodSteps:0, stepAcc:0, stepSide:1, fireT:0,
 };
-const input = { mx:0, my:0, attack:false, attackHeld:false, block:false, kick:false, grab:false, throw:false, jump:false, rage:false, sprint:false };
+const input = { dash:false, shock:false, smite:false, mx:0, my:0, attack:false, attackHeld:false, block:false, kick:false, grab:false, throw:false, jump:false, rage:false, sprint:false };
 
 function newWorld(id){
   const L = getScenario(id);
   scene = new THREE.Scene();
+  GRAV = settings.mut.lowgrav ? 6.5 : 18; setSimGravity(GRAV); setFxGravity(GRAV);
+  for(const h of [vm.hR, vm.hL]) for(const c of [...h.children]) if(c.userData.blood) h.remove(c);
+  vm.drip = 0;
   room = buildRoom(scene, L, settings.quality); renderer.shadowMap.enabled = !!settings.quality;
   scene.add(camera);
   const fx = createFX(scene, L); fx.gore = settings.gore;
@@ -56,11 +63,12 @@ function newWorld(id){
     spawnPts:spawnPoints(L, 18), spawnT:1.2, bossSpawned:false, boss:null, done:false, hitstop:0, shake:0,
     targets(){ return this.fighters.concat([player]); },
     hit, hurtPlayer, shoot, explode, onKill, announce, alarm, onBrawl, brawl:false, spreadT:1,
+    mut:settings.mut, mult:scoreMult(), fires:(L.fires || []).map(f => ({ x:f[0], z:f[1], y:groundAt(L, f[0], f[1], 2), r:f[2], t:Infinity, tick:0, by:null })), slowmo:0, ignite, slam, damageSolid,
   };
   for(const p of L.pickups){ const it = new Item(W, p.w, p.x, p.y || 0, p.z); W.items.push(it); }
   player.pos.set(L.player[0], 0, L.player[1]); player.vel.set(0, 0, 0);
   player.yaw = L.player[2]; player.pitch = 0; player.hp = 100; player.alive = true;
-  player.weapon = null; player.wstate = { used:0 }; player.rage = 0; player.raging = 0; player.cool = 0; player.pending = null;
+  player.weapon = null; player.wstate = { used:0 }; player.rage = 0; player.raging = 0; player.cool = 0; player.pending = null; player.dashT = 0; player.iframes = 0; player.bloodSteps = 0; player.charge = null;
   setHeld(null);
   if(L.waves){ W.stats.wave = 0; W.brawl = true; nextWave(); }
   W.remaining = L.waves ? 0 : L.enemies.count;
@@ -136,10 +144,114 @@ function nextWave(){
 }
 
 // ---------------- combat ----------------
+// ---------------- fire, furniture, powers ----------------
+function ignite(pos, r, dur, by){
+  W.fires.push({ x:pos.x, z:pos.z, y:groundAt(W.L, pos.x, pos.z, pos.y + 0.3), r, t:dur, tick:0, by });
+  if(W.fires.length > 10) W.fires.splice(W.fires.findIndex(f => isFinite(f.t)), 1);
+  alarm(pos, by, 8);
+}
+function updateFires(dt){
+  for(let i = W.fires.length - 1; i >= 0; i--){
+    const f = W.fires[i]; f.t -= dt;
+    if(f.t <= 0){ W.fires.splice(i, 1); continue; }
+    const n = Math.ceil(f.r * 2.2 * Math.min(1, f.t / 1.5));
+    for(let k = 0; k < n; k++){ const a = Math.random() * 6.28, d = Math.sqrt(Math.random()) * f.r; W.fx.flame(f.x + Math.cos(a) * d, f.y + 0.05, f.z + Math.sin(a) * d, 1, 0.05); }
+    f.tick -= dt; if(f.tick > 0) continue; f.tick = 0.25;
+    for(const o of W.fighters) if(!o.gone && o.burn <= 0 && Math.abs(o.pos.y - f.y) < 1 && Math.hypot(o.pos.x - f.x, o.pos.z - f.z) < f.r + 0.2) o.ignite(f.by || o.lastHitBy);
+    if(player.alive && Math.abs(player.pos.y - f.y) < 0.8 && Math.hypot(player.pos.x - f.x, player.pos.z - f.z) < f.r){
+      player.hp -= 5 * (W.mut.hardcore ? 2 : 1); flash(0.35); audio.hurt(); hintOnce('🔥 You\'re standing in fire!');
+      if(player.hp <= 0){ player.hp = 0; playerDie(null); }
+    }
+  }
+}
+function damageSolid(s, dmg, dir, by){
+  if(!s || !s.hp || s.dead) return;
+  s.hp -= dmg;
+  W.fx.chunks(s.x, s.y + s.h * 0.5, s.z, s.w * 0.6, s.h * 0.3, s.d * 0.6, s.c, 5);
+  if(s.hp > 0){ audio.thud(0.9); return; }
+  s.dead = true;
+  const i = W.L.solids.indexOf(s); if(i >= 0) W.L.solids.splice(i, 1);
+  if(s.mesh && s.mesh.parent) s.mesh.parent.remove(s.mesh);
+  W.fx.chunks(s.x, s.y, s.z, s.w, s.h, s.d, s.c, 34); audio.crunch(); W.shake = Math.max(W.shake, 0.2);
+  if(by === player) addScore(25, 'SMASHED');
+  if(s.explosive){ const p = new THREE.Vector3(s.x, s.y + 0.3, s.z); explode(p, 4.8, 100, by || player); ignite(p, 1.6, 4, by || player); }
+}
+function shockRing(x, y, z, r){
+  for(let k = 0; k < 60; k++){ const a = k / 60 * 6.28; W.fx.flame(x + Math.cos(a) * 0.6, y + 0.2, z + Math.sin(a) * 0.6, 1, 0.1, 1); }
+  for(let k = 0; k < 24; k++){ const a = Math.random() * 6.28; W.fx.gib(x + Math.cos(a) * r * 0.4, y + 0.1, z + Math.sin(a) * r * 0.4, Math.cos(a) * 5, 2 + Math.random() * 3, Math.sin(a) * 5, 0x8a8a80, false, 0.8); }
+}
+// boss ground slam: everything near him gets launched — unless it's in the air
+function slam(b){
+  audio.boom(); W.shake = Math.max(W.shake, 0.6);
+  shockRing(b.pos.x, b.pos.y, b.pos.z, 4.2);
+  for(const o of W.fighters){
+    if(o === b || o.gone || !o.alive) continue;
+    const dx = o.pos.x - b.pos.x, dz = o.pos.z - b.pos.z, d = Math.hypot(dx, dz) || 1;
+    if(d < 4.2){ o.lastHitBy = b; o.provoke(b); hit(o, 'torso', { dmg:22, knock:11, sever:0, kind:'melee', heavy:true }, new THREE.Vector3(dx / d, 0, dz / d), b, { knock:11 }); }
+  }
+  for(const s of [...W.L.solids]) if(Math.hypot(s.x - b.pos.x, s.z - b.pos.z) < 4) damageSolid(s, 80, null, b);
+  const dx = player.pos.x - b.pos.x, dz = player.pos.z - b.pos.z, d = Math.hypot(dx, dz) || 1;
+  if(d < 4.2 && player.alive){
+    if(!player.onGround){ addScore(100, 'SLAM DODGED'); }
+    else hurtPlayer(30, new THREE.Vector3(dx / d, 0, dz / d), 14, b);
+  }
+}
+function shockwave(){
+  if(player.rage < 0.5 || !player.alive) return;
+  player.rage -= 0.5; audio.boom(); W.shake = 0.6; announce('SHOCKWAVE', 0.8);
+  const R = 7, p = player.pos;
+  shockRing(p.x, p.y, p.z, R); alarm(p, player, 10);
+  for(const f of W.fighters){
+    if(f.gone || (!f.alive && !f.corpse)) continue;
+    const dx = f.pos.x - p.x, dz = f.pos.z - p.z, d = Math.hypot(dx, dz) || 1; if(d > R) continue;
+    const k = 1 - d / R, dir = new THREE.Vector3(dx / d, 0, dz / d);
+    if(f.alive) hit(f, 'torso', { dmg:18 + 30 * k, knock:8 + 12 * k, sever:0, kind:'melee', heavy:true }, dir, player, { knock:8 + 12 * k });
+    else { f.vel.x += dir.x * 9 * k; f.vel.z += dir.z * 9 * k; f.vel.y += 4 * k; }
+  }
+  for(const it of W.items){ const dx = it.pos.x - p.x, dz = it.pos.z - p.z, d = Math.hypot(dx, dz) || 1; if(d < R && it.alive && !it.held){ it.vel.set(dx / d * 9, 4, dz / d * 9); it.spin.set(10, 0, 8); it.thrown = true; it.owner = player; } }
+  for(const s of [...W.L.solids]) if(Math.hypot(s.x - p.x, s.z - p.z) < R * 0.7) damageSolid(s, 75, null, player);
+  W.fx.nudge(p.x, p.z, R, 0, 0);
+}
+function smite(){
+  if(player.rage < 0.34 || !player.alive) return;
+  const o = camera.getWorldPosition(new THREE.Vector3()); camForward(fwd);
+  let best = null, ba = 0.3;
+  for(const f of W.fighters){
+    if(!f.alive || f.gone) continue;
+    _t.set(f.pos.x, f.pos.y + 1.1 * f.scale, f.pos.z).sub(o); const d = _t.length(); if(d > 32) continue;
+    const a = Math.acos(Math.max(-1, Math.min(1, _t.dot(fwd) / d)));
+    if(a < ba){ ba = a; best = f; }
+  }
+  if(!best){ feed('⚡ No target — look at someone'); return; }
+  player.rage -= 0.34; audio.zap(); W.shake = 0.5; W.hitstop = 0.1;
+  const top = new THREE.Vector3(best.pos.x + (Math.random() - 0.5) * 2, (W.L.h || 7) + (W.L.ceil == null ? 6 : 0), best.pos.z + (Math.random() - 0.5) * 2);
+  W.fx.bolt(top, best.pos.clone().setY(best.pos.y + 0.2));
+  W.fx.flame(best.pos.x, best.pos.y + 0.8, best.pos.z, 40, 0.4, 1);
+  const light = new THREE.PointLight(0xa0c8ff, 120, 22, 1.3); light.position.set(best.pos.x, best.pos.y + 2, best.pos.z); W.scene.add(light); setTimeout(() => W.scene.remove(light), 160);
+  alarm(best.pos, player, 9);
+  const dir = new THREE.Vector3(best.pos.x - player.pos.x, 0, best.pos.z - player.pos.z).normalize();
+  for(const f of W.fighters) if(f !== best && f.alive && f.pos.distanceTo(best.pos) < 2.2){ f.ignite(player); f.knockDown(new THREE.Vector3(f.pos.x - best.pos.x, 0, f.pos.z - best.pos.z).normalize(), 7); }
+  if(best.boss){ hit(best, 'torso', { dmg:170, knock:10, sever:0, kind:'melee', heavy:true, charged:true }, dir, player, { knock:10 }); best.ignite(player); }
+  else { best.char(); best.lastHitBy = player; W.ctx = { smite:true }; best.hp = 0; best.die(dir, true, player); W.ctx = null; }
+}
+function bloodyWeapon(){
+  const tgt = vm.held ? vm.held.children[(Math.random() * vm.held.children.length) | 0] : (vm.side ? vm.hR : vm.hL);
+  if(!tgt) return;
+  vm.drip = 3.5; vm.dripObj = vm.held || tgt;
+  const root = vm.held || tgt; root.userData.bloodN = (root.userData.bloodN || 0) + 1; if(root.userData.bloodN > 16) return;
+  const g = tgt.geometry; if(!g) return; if(!g.boundingBox) g.computeBoundingBox();
+  const bb = g.boundingBox, c = new THREE.Mesh(W.woundGeo, W.woundMat); c.userData.blood = true;
+  const r = () => Math.random();
+  c.position.set(bb.min.x + r() * (bb.max.x - bb.min.x), bb.min.y + (vm.held ? 0.3 + r() * 0.7 : r()) * (bb.max.y - bb.min.y), vm.held ? bb.min.z + r() * (bb.max.z - bb.min.z) : bb.max.z - 0.02);
+  if(r() < 0.5) c.position.x = r() < 0.5 ? bb.min.x : bb.max.x; else if(vm.held) c.position.z = r() < 0.5 ? bb.min.z : bb.max.z;
+  c.scale.setScalar(vm.held ? 0.22 + r() * 0.25 : 1.2 + r());
+  tgt.add(c);
+}
+
 const _d = new THREE.Vector3(), _o = new THREE.Vector3(), _t = new THREE.Vector3();
 function hit(f, part, w, dir, attacker, opts = {}){
   const mine = attacker === player;
-  const mult = (mine && player.raging ? 2.5 : 1) * (opts.mult || 1);
+  const mult = (mine && player.raging ? 2.5 : 1) * (opts.mult || 1) * (mine && W.mut.onepunch ? 25 : 1);
   const res = resolveHit(w, f.partHp[part] ?? f.hp, Math.random, mult);
   if(mine && player.raging && part !== 'torso') res.sever = true;
   const knock = (opts.knock ?? w.knock ?? 3) * (mine && player.raging ? 2 : 1);
@@ -154,12 +266,17 @@ function hit(f, part, w, dir, attacker, opts = {}){
   if(mine){
     W.hitstop = w.heavy || res.sever ? 0.07 : 0.035; W.shake = Math.max(W.shake, w.heavy ? 0.25 : 0.12);
     $('crosshair').classList.add('hot'); setTimeout(() => $('crosshair').classList.remove('hot'), 90);
-    if(res.sever && part !== 'head' && wasAlive) feed('✂ ' + ({ armL:'LEFT ARM', armR:'RIGHT ARM', legL:'LEFT LEG', legR:'RIGHT LEG' })[part] + ' OFF');
+    if(!opts.thrown && w.kind !== 'gun' && f.pos.distanceTo(player.pos) < 3.2) bloodyWeapon();
+    if(res.sever && part !== 'head' && part !== 'torso' && wasAlive) feed('✂ ' + ({ armL:'LEFT ARM', armR:'RIGHT ARM', legL:'LEFT LEG', legR:'RIGHT LEG' })[part] + ' OFF');
     player.rage = Math.min(1, player.rage + (res.sever ? 0.06 : 0.015));
   }
 }
 function hurtPlayer(dmg, dir, knock, attacker){
   if(!player.alive || W.done) return;
+  if(player.iframes > 0){ if(!player.dodged){ player.dodged = true; addScore(50, 'DODGED'); } return; }
+  if(W.mut.hardcore) dmg *= 2;
+  { const rx = Math.cos(player.yaw), rz = -Math.sin(player.yaw), fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+    const el = $('dmg-dir'); el.style.transform = `rotate(${Math.atan2(-dir.x * rx - dir.z * rz, -dir.x * fx - dir.z * fz)}rad)`; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
   const fwdx = Math.sin(player.yaw + Math.PI), fwdz = Math.cos(player.yaw + Math.PI);
   const facing = -(dir.x * fwdx + dir.z * fwdz) > 0.2;
   if(player.block && facing && player.blockT < 0.25 && attacker && !attacker.isPlayer && attacker.alive){
@@ -201,10 +318,13 @@ function rayBox(o, d, s){
 }
 function rayWorld(o, d, maxT){
   const L = W.L; let best = maxT;
-  for(const s of L.solids){ const t = rayBox(o, d, s); if(t != null && t < best) best = t; }
+  rayWorld.solid = null;
+  for(const s of L.solids){ const t = rayBox(o, d, s); if(t != null && t < best){ best = t; rayWorld.solid = s; } }
+  const bs = best;
   for(const [axis, lim] of [['x', L.w / 2], ['z', L.d / 2]]) if(Math.abs(d[axis]) > 1e-6){ const t = (Math.sign(d[axis]) * lim - o[axis]) / d[axis]; if(t > 0 && t < best) best = t; }
   if(d.y < 0){ const t = -o.y / d.y; if(t < best) best = t; }
   if(L.ceil != null && d.y > 0){ const t = (L.h - o.y) / d.y; if(t < best) best = t; }
+  if(best < bs) rayWorld.solid = null;
   return best;
 }
 function shoot(o, dir, w, shooter, extra = 0){
@@ -212,7 +332,7 @@ function shoot(o, dir, w, shooter, extra = 0){
   for(let p = 0; p < (w.pellets || 1); p++){
     const sp = (w.spread || 0) + extra;
     const d = _d.copy(dir).add(_t.set((Math.random() - 0.5) * sp * 2, (Math.random() - 0.5) * sp * 2, (Math.random() - 0.5) * sp * 2)).normalize();
-    const wallT = rayWorld(o, d, w.range || 50);
+    const wallT = rayWorld(o, d, w.range || 50), wallS = rayWorld.solid;
     let best = wallT, who = null;
     for(const f of W.targets()){
       if(f === shooter || f.gone || (!f.alive && !f.corpse)) continue;
@@ -227,6 +347,7 @@ function shoot(o, dir, w, shooter, extra = 0){
       const part = who.corpse ? ['armL', 'armR', 'legL', 'legR', 'head', 'torso'].find(k => !who.missing[k]) || 'torso' : partFromHit(hy, lat, who.scale, who.missing);
       hit(who, part, w, new THREE.Vector3(d.x, 0, d.z).normalize(), shooter, { knock:w.knock });
     } else {
+      if(wallS) damageSolid(wallS, w.dmg, d, shooter);
       for(let k = 0; k < 4; k++) W.fx.gib(end.x - d.x * 0.05, end.y - d.y * 0.05, end.z - d.z * 0.05, -d.x * 2 + (Math.random() - 0.5) * 2, 1 + Math.random() * 2, -d.z * 2 + (Math.random() - 0.5) * 2, 0x777766, false, 0.5);
     }
   }
@@ -251,12 +372,14 @@ function explode(pos, R, dmg, owner){
   if(pd < R) hurtPlayer(dmg * 0.6 * (1 - pd / R), new THREE.Vector3(player.pos.x - pos.x, 0, player.pos.z - pos.z).normalize(), 10 * (1 - pd / R), owner);
   for(const it of W.items){ const dx = it.pos.x - pos.x, dz = it.pos.z - pos.z, d = Math.hypot(dx, dz); if(d < R && it.alive){ it.vel.set(dx / (d || 1) * 8, 5, dz / (d || 1) * 8); it.spin.set(10, 0, 10); } }
   fx.nudge(pos.x, pos.z, R, 0, 0);
+  for(const s of [...W.L.solids]){ const d = Math.hypot(s.x - pos.x, s.z - pos.z); if(d < R && !s.dead) damageSolid(s, dmg * (1 - d / R) * 1.6, null, owner); }
 }
 function explodeCorpse(f, dir){ f.obliterate(dir); }
 const COMBO = ['', '', 'DOUBLE KILL', 'TRIPLE KILL', 'MASSACRE', 'BLOODBATH', 'PAINTED RED'];
 function addScore(pts, label){
-  W.stats.score += Math.round(pts);
-  if(label) feed('+' + Math.round(pts) + ' ' + label);
+  pts = Math.round(pts * W.mult);
+  W.stats.score += pts;
+  if(label) feed('+' + pts + ' ' + label);
 }
 function onKill(f, killer, exploded){
   const ctx = W.ctx || {};
@@ -270,6 +393,9 @@ function onKill(f, killer, exploded){
     if(ctx.thrown){ pts += 150; tags.push('THROWN'); }
     if(ctx.slam){ pts += 150; tags.push('WALL SPLAT'); }
     if(ctx.charged){ pts += 75; tags.push('POWER'); }
+    if(ctx.burned){ pts += 150; tags.push('ROASTED'); }
+    if(ctx.bled){ pts += 100; tags.push('BLED OUT'); }
+    if(ctx.smite){ pts += 100; tags.push('SMITE'); }
     if(player.raging){ pts += 50; }
     if(f.boss){ pts += 1000; tags.push('BOSS'); }
     pts *= c.n;
@@ -277,6 +403,8 @@ function onKill(f, killer, exploded){
     if(c.n >= 2) announce(COMBO[Math.min(c.n, COMBO.length - 1)] + (c.n > 6 ? ' ×' + c.n : ''), 1.2);
     player.rage = Math.min(1, player.rage + (f.boss ? 0.5 : 0.18));
     if(exploded) W.stats.exploded++;
+    // slow-motion on the good ones
+    if(f.boss) W.slowmo = 1.6; else if(c.n >= 3 || (f.missing.head && Math.random() < 0.5) || (exploded && Math.random() < 0.3)) W.slowmo = Math.max(W.slowmo, 0.45);
   } else if(killer) feed('🍺 brawler down');
   if(f.boss){ announce(f.name + ' IS DOWN', 1.6); audio.bell(); }
 }
@@ -301,7 +429,7 @@ function meleeTarget(reach){
 function doMelee(wo){
   const w = wo || wdef(player.weapon);
   const tg = meleeTarget(w.reach);
-  if(!tg){ audio.whoosh(); return; }
+  if(!tg){ if(!hitFurniture(w.reach + 0.4, w.dmg * (w.heavy ? 2.2 : 1.2) * (player.raging ? 2 : 1))) audio.whoosh(); return; }
   const f = tg.f, d = tg.d;
   const eyeY = player.pos.y + EYE;
   const hy = Math.max(0.1, eyeY + Math.tan(player.pitch) * d - f.pos.y);
@@ -317,6 +445,12 @@ function doMelee(wo){
       feed('💔 ' + w.name + ' broke'); setHeld(nw); player.wstate = { used:0, ammo:wdef(nw).ammo };
     }
   }
+}
+function hitFurniture(reach, dmg){
+  const o = camera.getWorldPosition(new THREE.Vector3()); camForward(fwd);
+  rayWorld(o, fwd, reach); const s = rayWorld.solid;
+  if(!s || !s.hp) return false;
+  damageSolid(s, dmg, fwd, player); W.shake = Math.max(W.shake, 0.1); return true;
 }
 function attack(charge = 0){
   if(player.cool > 0 || player.block || !player.alive) return;
@@ -347,7 +481,7 @@ function kick(){
     const tg = meleeTarget(1.7);
     W.fx.nudge(player.pos.x - Math.sin(player.yaw) * 1.2, player.pos.z - Math.cos(player.yaw) * 1.2, 1.2, -Math.sin(player.yaw) * 6, -Math.cos(player.yaw) * 6);
     for(const it of W.items){ const dx = it.pos.x - player.pos.x, dz = it.pos.z - player.pos.z; if(it.alive && dx * dx + dz * dz < 2.2 && it.pos.y < 1){ it.vel.set(-Math.sin(player.yaw) * 7, 3, -Math.cos(player.yaw) * 7); it.spin.set(10, 0, 8); } }
-    if(!tg){ audio.whoosh(); return; }
+    if(!tg){ if(!hitFurniture(1.9, 35)) audio.whoosh(); return; }
     const dir = new THREE.Vector3(tg.f.pos.x - player.pos.x, 0, tg.f.pos.z - player.pos.z).normalize();
     hit(tg.f, 'torso', { dmg:11, knock:11.5, sever:0, kind:'melee', heavy:false }, dir, player, { knock:11.5 });
   } };
@@ -361,6 +495,7 @@ function throwHeld(){
   it.vel.copy(fwd).multiplyScalar(sp).add(player.vel.clone().setY(0)); it.vel.y += 2.2;
   it.spin.set(w.kind === 'throw' && player.weapon === 'tknives' ? 20 : 10, 0, 6); it.thrown = true; it.owner = player;
   if(player.weapon === 'dynamite') it.fuse = w.fuse;
+  if(w.fire) it.lit = true;
   W.items.push(it);
   audio.whoosh(); vm.swing = 1; vm.swingDur = 0.3; vm.side = 1;
   player.cool = w.kind === 'throw' ? w.rate : 0.35;
@@ -490,6 +625,9 @@ function updateHUD(){
   $('rage-fill').style.width = (player.raging > 0 ? player.raging / 7 : player.rage) * 100 + '%';
   document.querySelector('.bar.rage').classList.toggle('full', player.rage >= 1 && !player.raging);
   $('b-rage').classList.toggle('hidden', !(player.rage >= 1 && !player.raging));
+  $('b-shock').classList.toggle('hidden', player.rage < 0.5);
+  $('b-smite').classList.toggle('hidden', player.rage < 0.34);
+  $('powers').innerHTML = TOUCH ? '' : `<span class="${player.rage >= 0.34 ? 'on' : ''}">[X] ⚡ SMITE</span><span class="${player.rage >= 0.5 ? 'on' : ''}">[Z] 💥 SHOCKWAVE</span><span class="${player.rage >= 1 ? 'on' : ''}">[R] 🔥 BERSERK</span>`;
   document.body.classList.toggle('raging', player.raging > 0);
   const w = wdef(player.weapon);
   $('weapon-name').textContent = w.name.toUpperCase();
@@ -514,6 +652,8 @@ function frame(now){
   if(!running || !W){ return; }
   if(paused){ renderer.render(scene, camera); return; }
   if(W.hitstop > 0){ W.hitstop -= dt; dt *= 0.15; }
+  if(W.slowmo > 0){ W.slowmo -= dt; dt *= 0.28; }
+  document.body.classList.toggle('slowmo', W.slowmo > 0);
   W.stats.t += dt;
   W.combo.t += dt;
   if(W.wobble > 0) W.wobble = Math.max(0, W.wobble - dt);
@@ -547,6 +687,7 @@ function frame(now){
   const corpses = W.fighters.filter(f => f.corpse);
   if(corpses.length > 16){ const c = corpses[0]; W.scene.remove(c.group); c.gone = true; c.corpse = false; }
   W.fighters = W.fighters.filter(f => !f.gone || f.alive);
+  updateFires(dt);
   W.fx.update(dt);
   room.update(dt);
   // camera
@@ -596,6 +737,9 @@ function stepPlayer(dt){
   if(input.drink){ input.drink = false; drink(); }
   if(input.grab){ input.grab = false; grab(); }
   if(input.throw){ input.throw = false; throwHeld(); }
+  if(input.shock){ input.shock = false; shockwave(); }
+  if(input.smite){ input.smite = false; smite(); }
+  player.dashCd -= dt; player.iframes -= dt;
   if(input.rage){ input.rage = false; if(player.rage >= 1 && !player.raging){ player.raging = 7; player.rage = 0; announce('RAGE', 1.2); audio.rage(); } }
   // move
   let mx = 0, mz = 0;
@@ -610,8 +754,23 @@ function stepPlayer(dt){
   player.onGround = player.pos.y <= g + 0.02;
   const k = 1 - Math.exp(-(player.onGround ? 12 : 2) * dt);
   player.vel.x += (wx - player.vel.x) * k; player.vel.z += (wz - player.vel.z) * k;
+  // dodge dash: a burst in the direction you're moving (backwards if standing still), briefly untouchable
+  if(input.dash){ input.dash = false; if(player.dashCd <= 0){
+    let dx = mx * cy + mz * sy, dz = -mx * sy + mz * cy; const dl = Math.hypot(dx, dz);
+    if(dl < 0.2){ dx = sy; dz = cy; } else { dx /= dl; dz /= dl; }
+    player.dashX = dx; player.dashZ = dz; player.dashT = 0.17; player.dashCd = 0.9; player.iframes = 0.3; player.dodged = false; audio.whoosh();
+  } }
+  if(player.dashT > 0){ player.dashT -= dt; player.vel.x = player.dashX * 15; player.vel.z = player.dashZ * 15; }
+  // bloody footprints after walking through a pool
+  if(player.onGround){
+    const sp = Math.hypot(player.vel.x, player.vel.z);
+    if(sp > 0.5 && W.fx.isWet(player.pos.x, player.pos.y, player.pos.z)) player.bloodSteps = 16;
+    player.stepAcc += sp * dt;
+    if(player.stepAcc > 0.7){ player.stepAcc = 0; player.stepSide *= -1; if(player.bloodSteps > 0 && !W.fx.isWet(player.pos.x, player.pos.y, player.pos.z)){ player.bloodSteps--; W.fx.footprint(player.pos.x, player.pos.y, player.pos.z, player.yaw, player.stepSide); } }
+  }
+  if(vm.drip > 0 && vm.dripObj){ vm.drip -= dt; if(Math.random() < dt * 9 * settings.gore){ const p = vm.dripObj.getWorldPosition(_t); W.fx.drop(p.x - Math.sin(player.yaw) * 0.25, p.y, p.z - Math.cos(player.yaw) * 0.25, player.vel.x * 0.5, 0, player.vel.z * 0.5); } }
   if(input.jump){ input.jump = false; if(player.onGround){ player.vel.y = 6.2; } }
-  player.vel.y -= 18 * dt;
+  player.vel.y -= GRAV * dt;
   player.pos.addScaledVector(player.vel, dt);
   // collide
   const r = P_RADIUS, hw = L.w / 2 - r, hd = L.d / 2 - r;
@@ -656,6 +815,9 @@ window.addEventListener('keydown', e => {
   if(e.code === 'KeyE') input.grab = true;
   if(e.code === 'KeyQ' || e.code === 'KeyG') input.throw = true;
   if(e.code === 'KeyR') input.rage = true;
+  if(e.code === 'KeyZ') input.shock = true;
+  if(e.code === 'KeyX') input.smite = true;
+  if(e.code === 'KeyV' || e.code === 'ControlLeft' || e.code === 'AltLeft'){ input.dash = true; e.preventDefault(); }
   if(e.code === 'KeyH' || e.code === 'KeyC') input.drink = true;
   if(e.code === 'Escape' || e.code === 'KeyP') togglePause();
 });
@@ -697,6 +859,9 @@ function bindTouch(){
   btn('b-jump', () => { input.jump = true; });
   btn('b-rage', () => { input.rage = true; });
   btn('b-drink', () => { input.drink = true; });
+  btn('b-dash', () => { input.dash = true; });
+  btn('b-shock', () => { input.shock = true; });
+  btn('b-smite', () => { input.smite = true; });
 }
 bindTouch();
 
@@ -709,10 +874,18 @@ function buildMenu(){
     const L = f();
     const el = document.createElement('button'); el.className = 'scen';
     const rec = b[L.id];
-    el.innerHTML = `<b>${L.name.toUpperCase()}</b><small>${L.blurb}</small><i>${rec ? (L.waves ? 'BEST: WAVE ' + (rec.wave || 0) : rec.time ? '✔ CLEARED · ' + rec.time + 's' : 'NOT CLEARED YET') + (rec.score ? ' · 🏆 ' + rec.score.toLocaleString() : '') : (L.waves ? 'SURVIVE THE WAVES' : L.enemies.count + ' BRAWLERS + ' + L.boss.name)}</i>`;
+    const st = (rec && rec.stars) || 0, stars = [1, 2, 4].map(m => st & m ? '★' : '☆').join('');
+    el.innerHTML = `<em class="stars">${stars}</em><b>${L.name.toUpperCase()}</b><small>${L.blurb}</small><i>${rec ? (L.waves ? 'BEST: WAVE ' + (rec.wave || 0) : rec.time ? '✔ CLEARED · ' + rec.time + 's' : 'NOT CLEARED YET') + (rec.score ? ' · 🏆 ' + rec.score.toLocaleString() : '') : (L.waves ? 'SURVIVE THE WAVES' : L.enemies.count + ' BRAWLERS + ' + L.boss.name)}</i>`;
     el.onclick = () => start(L.id);
     list.appendChild(el);
   }
+  const mb = $('mut-list'); mb.innerHTML = '';
+  for(const [k, label, x] of MUTS){
+    const el = document.createElement('button'); el.className = 'mut' + (settings.mut[k] ? ' on' : ''); el.textContent = label + (x !== 1 ? ' ×' + x : '');
+    el.onclick = () => { settings.mut[k] = !settings.mut[k]; saveSettings(); buildMenu(); };
+    mb.appendChild(el);
+  }
+  $('mut-mult').textContent = 'SCORE ×' + scoreMult().toFixed(2).replace(/\.?0+$/, '');
 }
 function start(id){
   audio.unlock(); orient.goLandscape();
@@ -750,6 +923,10 @@ function endRun(win){
   $('r-title').textContent = L.waves ? 'SURVIVED ' + (s.wave - 1) + ' WAVES' : win ? 'TOWN PAINTED RED' : 'YOU GOT PAINTED';
   const prevBest = (b[L.id] && b[L.id].score) || 0;
   if(s.score > prevBest){ b[L.id] = Object.assign(b[L.id] || {}, { score:s.score }); try{ localStorage.setItem(BEST_KEY, JSON.stringify(b)); }catch(e){} }
+  const goals = L.waves ? [['Reach wave 3', s.wave >= 3], ['Reach wave 6', s.wave >= 6], ['Score 20,000', s.score >= 20000]] : [['Clear the bar', !!win], ['Score 12,000', s.score >= 12000], ['×4 combo', s.bestCombo >= 4]];
+  let stBits = (b[L.id] && b[L.id].stars) || 0; goals.forEach(([, ok], i) => { if(ok) stBits |= 1 << i; });
+  b[L.id] = Object.assign(b[L.id] || {}, { stars:stBits }); try{ localStorage.setItem(BEST_KEY, JSON.stringify(b)); }catch(e){}
+  $('r-stars').innerHTML = goals.map(([g, ok]) => `<span class="${ok ? 'got' : ''}">${ok ? '★' : '☆'} ${g}</span>`).join('');
   const rows = [['SCORE', s.score.toLocaleString() + (s.score > prevBest ? ' 🏆 NEW BEST' : '')], ['Best combo', '×' + s.bestCombo], ['Parries', s.parries], ['Kills', s.kills], ['Limbs removed', s.limbs], ['Heads taken', s.heads], ['Obliterated', s.exploded], ['Blood splats', W.fx.splats], ['Time', t + 's'], ['City Driver cash', '+$' + cash.toLocaleString()]];
   $('r-stats').innerHTML = rows.map(([a, v]) => `<span>${a}</span><span>${v}</span>`).join('');
   $('result').classList.remove('hidden'); $('hud').classList.add('hidden'); $('touch').classList.add('hidden');
@@ -783,4 +960,4 @@ const q = new URLSearchParams(location.search).get('map');
 if(q) start(q);
 // idle menu backdrop: a slowly turning biker bar
 else { newWorld('biker'); running = false; (function spin(){ if(running) return; requestAnimationFrame(spin); camera.position.set(Math.sin(performance.now() / 6000) * 6, 2.2, Math.cos(performance.now() / 6000) * 6); camera.lookAt(0, 1.2, 0); for(const f of W.fighters) f.animate(0.016, 0), f.sync(); W.fx.update(0.016); room.update(0.016); renderer.render(scene, camera); })(); }
-if(new URLSearchParams(location.search).has('debug')) window.__brawl = { W:() => W, player, start, hit, spawnEnemy, explode, input, attack, kick, wdef, give:id => { setHeld(id); const w = wdef(id); player.wstate = { used:0, ammo:w.ammo, count:w.count }; } };
+if(new URLSearchParams(location.search).has('debug')) window.__brawl = { shockwave, smite, ignite, damageSolid, settings, W:() => W, player, start, hit, spawnEnemy, explode, input, attack, kick, wdef, give:id => { setHeld(id); const w = wdef(id); player.wstate = { used:0, ammo:w.ammo, count:w.count }; } };

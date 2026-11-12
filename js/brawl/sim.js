@@ -6,7 +6,9 @@ import { V, buildPerson, buildWeaponModel, carveVoxels, rebuildPart, PART_OFFSET
 import { wdef, resolveHit, wear, throwDmg } from './weapons.js';
 import { groundAt } from './maps.js';
 
-const G = 18;
+let G = 18;
+export function setSimGravity(g){ G = g; }
+const CHAR = [0x1a1410, 0x2a1c12, 0x0e0a08];
 const PART_HP = { head:40, armL:45, armR:45, legL:50, legR:50 };
 const LIMBS = ['armL', 'armR', 'legL', 'legR'];
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
@@ -39,9 +41,10 @@ export class Item {
     W.scene.add(this.mesh);
   }
   get resting(){ return !this.thrown && this.vel.lengthSq() < 0.5; }
-  remove(){ this.alive = false; this.W.scene.remove(this.mesh); }
+  remove(){ this.alive = false; this.W.scene.remove(this.mesh); if(this.lit){ this.lit = false; this.W.fx.glass(this.pos.x, this.pos.y + 0.1, this.pos.z, 0x6a4a1a); this.W.audio.glass(); this.W.ignite(this.pos, 2.4, 7, this.owner); } }
   update(dt){
     const W = this.W, L = W.L;
+    if(this.lit){ W.fx.flame(this.pos.x, this.pos.y + 0.2, this.pos.z, 1, 0.05); if(!this.thrown){ this.remove(); return; } }
     if(this.fuse != null){
       this.fuse -= dt;
       if(Math.random() < 0.6) W.fx.gib(this.pos.x, this.pos.y + 0.25, this.pos.z, (Math.random() - 0.5), 1.5, (Math.random() - 0.5), 0xffd040, false, 0.4);
@@ -108,6 +111,8 @@ export class Fighter {
     this.group = p.group; this.pivots = p.pivots; this.palette = p.palette; this.outfit = outfit; this.person = p;
     this.voxStart = {}; for(const k in p.vox) this.voxStart[k] = p.vox[k].size;
     this.coward = Math.random() < 0.3; this.fleeT = 0;
+    this.bleeds = []; this.burn = 0; this.burnT = 0; this.slamCd = 4 + Math.random() * 2;
+    if(W.mut.bigheads) p.pivots.head.scale.setScalar(1.75);
     this.group.scale.setScalar(this.scale);
     W.scene.add(this.group);
     this.pos = new THREE.Vector3(x, 0, z); this.vel = new THREE.Vector3();
@@ -206,6 +211,7 @@ export class Fighter {
     W.fx.burst(wp.x, wp.y, wp.z, Math.max(3, (res.gibs >> 1) * W.gore), null, dir.x, dir.z, 1);
     if(Math.random() < 0.6) W.fx.pool(this.pos.x + dir.x * 0.6, this.pos.z + dir.z * 0.6, 0.3 + res.dmg / 80);
     const pulped = this.carve(this.missing[part] ? 'torso' : part, dir, res);
+    if(this.bleeds.length < 6 && res.dmg > 8) this.bleeds.push({ part:this.missing[part] ? 'torso' : part, t:5 + Math.random() * 7, rate:3 + res.dmg / 8, acc:0 });
     if(pulped && part !== 'torso' && !this.missing[part]){ res.sever = true; res.crush = true; }
     // limbs carry their own health; the body takes the rest
     const mult = part === 'head' ? 1.7 : part === 'torso' ? 1 : 0.45;
@@ -255,6 +261,53 @@ export class Fighter {
     if(part === 'torso' && left < 0.4){ if(this.alive){ this.hp = 0; this.die(dir, true, this.lastHitBy); } else this.obliterate(dir); return true; }
     return left < 0.35;
   }
+  bleedStep(dt){
+    const W = this.W;
+    for(let i = this.bleeds.length - 1; i >= 0; i--){
+      const b = this.bleeds[i]; b.t -= dt;
+      if(b.t <= 0 || (b.part && this.missing[b.part])){ this.bleeds.splice(i, 1); continue; }
+      b.acc += dt * b.rate * W.gore * Math.min(1, b.t / 3);
+      if(b.acc < 1) continue;
+      if(b.stump){
+        // arterial spurt: pulses with a heartbeat, arcs out of the stump
+        const p = this.group.localToWorld(_v2.set(b.stump[0] * V, b.stump[1] * V, b.stump[2] * V));
+        const o = _v.set(b.out[0], b.out[1], b.out[2]).applyQuaternion(this.group.quaternion);
+        const pulse = Math.max(0, Math.sin(W.stats.t * (this.alive ? 11 : 6) + this.id)) * Math.min(1, b.t / 4);
+        while(b.acc >= 1){ b.acc -= 1; const s = 0.6 + pulse * 3.2; W.fx.drop(p.x, p.y, p.z, o.x * s + (Math.random() - 0.5) * 0.5 + this.vel.x, o.y * s + 0.6 + pulse * 1.2, o.z * s + (Math.random() - 0.5) * 0.5 + this.vel.z); }
+      } else {
+        const p = this.partWorld(b.part, _v2);
+        while(b.acc >= 1){ b.acc -= 1; W.fx.drop(p.x + (Math.random() - 0.5) * 0.2, p.y - Math.random() * 0.2, p.z + (Math.random() - 0.5) * 0.2, this.vel.x * 0.4, 0, this.vel.z * 0.4); }
+      }
+    }
+  }
+  ignite(by){
+    if(this.gone || this.burn > 0 || this.charred) return;
+    this.burn = 5 + Math.random() * 3; this.burnBy = by || this.burnBy;
+    if(this.alive){ this.provoke(by); this.lastHitBy = by || this.lastHitBy; }
+  }
+  burnStep(dt){
+    const W = this.W;
+    this.burn -= dt;
+    W.fx.flame(this.pos.x, this.pos.y + (this.alive && this.state !== 'down' ? 0.5 + Math.random() * 1.1 : 0.2) * this.scale, this.pos.z, 2, 0.25);
+    this.burnT -= dt;
+    if(this.burnT <= 0){
+      this.burnT = 0.3;
+      for(const o of W.fighters) if(o !== this && !o.gone && o.burn <= 0 && o.pos.distanceToSquared(this.pos) < 0.9 && Math.random() < 0.3) o.ignite(this.burnBy);
+    }
+    if(this.alive){
+      this.hp -= dt * 11; this.fleeT = Math.max(this.fleeT, 0.4);
+      if(this.hp <= 0){ this.char(); W.ctx = { burned:true }; this.die(_v.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)), false, this.burnBy); W.ctx = null; }
+    } else if(this.burn <= 0) this.char();
+  }
+  char(){
+    if(this.charred || this.gone) return; this.charred = true;
+    const P = this.person;
+    for(const part in P.vox){
+      if(this.missing[part]) continue;
+      const m = new Map(); for(const [k] of P.vox[part]) m.set(k, CHAR[(Math.random() * 3) | 0]);
+      P.vox[part] = m; (P.voxOwned ||= {})[part] = true; rebuildPart(P, part);
+    }
+  }
   wound(part){
     if(this.wounds > 40 || this.missing[part]) return;
     this.wounds++;
@@ -290,6 +343,8 @@ export class Fighter {
     const st = new THREE.Mesh(W.stumpGeo, W.woundMat);
     const sp = { head:[0, 19, 0], armL:[-5.5, 18.6, 0], armR:[5.5, 18.6, 0], legL:[-2, 10, 0], legR:[2, 10, 0] }[part];
     st.position.set(sp[0] * V, sp[1] * V, sp[2] * V); this.group.add(st);
+    this.bleeds = this.bleeds.filter(b => b.part !== part);
+    this.bleeds.push({ stump:sp, out:{ head:[0, 1, 0], armL:[-1, 0.3, 0], armR:[1, 0.3, 0], legL:[-0.3, -0.2, 0.4], legR:[0.3, -0.2, 0.4] }[part], t:9 + Math.random() * 5, rate:part === 'head' ? 26 : 16, acc:0 });
     W.fx.pool(this.pos.x, this.pos.z, 0.6);
     if(part === 'head'){
       W.stats.heads++;
@@ -311,6 +366,7 @@ export class Fighter {
   die(dir, explode, killer){
     const W = this.W;
     if(!this.alive) return;
+    if(W.mut.explosive && killer && killer.isPlayer) explode = true;
     this.alive = false; this.state = 'dead';
     if(!this.noCredit) W.onKill(this, killer, explode);
     if(this.weapon) this.dropWeapon(true);
@@ -335,7 +391,7 @@ export class Fighter {
     this.vel.x += dir.x * 4; this.vel.z += dir.z * 4; this.vel.y = Math.max(this.vel.y, 1.5);
     this.fallDir = Math.random() < 0.5 ? 1 : -1;
     this.spinY = (Math.random() - 0.5) * 4;
-    W.fx.pool(this.pos.x, this.pos.z, 1 + Math.random() * 0.6);
+    W.fx.pool(this.pos.x + dir.x * 0.5, this.pos.z + dir.z * 0.5, 0.5, 1.7 + Math.random() * 1.1);
   }
 
   // ---- brain ----
@@ -391,7 +447,11 @@ export class Fighter {
           const d = this.pos.distanceTo(W.player.pos);
           if(d < 3 && !this.missing.armL && !this.missing.armR){ this.state = 'block'; this.t = 0.6 + Math.random() * 0.5; }
         }
-        if(this.state === 'stagger' || this.state === 'block'){ if(this.t <= 0) this.state = 'idle'; }
+        if(this.boss && this.state === 'idle' && (this.slamCd -= dt) <= 0 && this.target && this.pos.distanceTo(this.target.pos) < 4.5){
+          this.state = 'slam'; this.t = 0.9; this.slamCd = 6 + Math.random() * 3; W.audio.rage(); if(this.target.isPlayer) W.feed('⚠ ' + this.name + ' is winding up a slam — JUMP or hit him!');
+        }
+        if(this.state === 'slam'){ if(this.t <= 0){ W.slam(this); this.state = 'recover'; this.t = 0.8; } }
+        else if(this.state === 'stagger' || this.state === 'block'){ if(this.t <= 0) this.state = 'idle'; }
         else if(this.state === 'windup'){
           this.faceTarget(dt, 10);
           if(this.t <= 0) this.strike();
@@ -441,6 +501,7 @@ export class Fighter {
     if(slam && preSpeed > 6 && (this.state === 'down' || this.corpse)){
       W.fx.splat(slam.x, this.pos.y + 1 + Math.random() * 0.6, slam.z, slam.nx, 0, slam.nz, 0.5 + preSpeed * 0.06);
       W.audio.thud(0.8);
+      if(slam.s) W.damageSolid(slam.s, preSpeed * 7, _v.set(-slam.nx, 0, -slam.nz));
       if(this.alive){ const res = { dmg:Math.round(preSpeed * 2.2), sever:false, crush:false, gibs:8 }; W.ctx = { slam:true }; this.takeHit('torso', res, _v.set(-slam.nx, 0, -slam.nz), 0, this.lastHitBy, null); W.ctx = null; }
       this.vel.x *= 0.3; this.vel.z *= 0.3;
     }
@@ -448,6 +509,14 @@ export class Fighter {
     if(this.pos.y < g){ this.pos.y = g; if(this.vel.y < -6 && this.flying){ W.fx.pool(this.pos.x, this.pos.z, 0.6); } this.vel.y = 0; this.flying = 0; }
     if(this.state === 'down' && this.flying){ this.yaw += this.spinY * dt; }
     if(this.corpse){ this.yaw += this.spinY * dt; this.spinY *= Math.exp(-3 * dt); this.tilt = Math.min(1, this.tilt + dt * 3.5); }
+    if(this.bleeds.length) this.bleedStep(dt);
+    if(this.burn > 0) this.burnStep(dt);
+    if(this.alive && !this.gone){
+      // losing limbs means bleeding out
+      const stumps = (this.missing.armL ? 1 : 0) + (this.missing.armR ? 1 : 0) + (this.missing.legL ? 1 : 0) + (this.missing.legR ? 1 : 0);
+      if(stumps){ this.hp -= dt * 3 * stumps; if(this.hp <= 0){ W.ctx = { bled:true }; this.die(_v.set(0, 0, 0), false, this.lastHitBy); W.ctx = null; } }
+    }
+    if(this.gone) return;
     this.animate(dt, Math.hypot(this.vel.x, this.vel.z));
     this.sync();
   }
@@ -471,6 +540,7 @@ export class Fighter {
       it.vel.set((tg.pos.x - this.pos.x) / t, 0.5 * G * t * 0.9, (tg.pos.z - this.pos.z) / t);
       it.spin.set(12, 0, 4); it.thrown = true; it.owner = this;
       if(this.weapon === 'dynamite') it.fuse = 1.4;
+      if(this.w.fire) it.lit = true;
       W.items.push(it); this.giveWeapon(null);
       return;
     }
@@ -523,7 +593,7 @@ export class Fighter {
         const d = Math.sqrt(d2) || 0.001, nx = d2 ? dx / d : 1, nz = d2 ? dz / d : 0;
         this.pos.x = cx + nx * r; this.pos.z = cz + nz * r;
         const vn = this.vel.x * nx + this.vel.z * nz; if(vn < 0){ this.vel.x -= vn * nx * 1.3; this.vel.z -= vn * nz * 1.3; }
-        if(!slam) slam = { x:cx, z:cz, nx, nz };
+        if(!slam) slam = { x:cx, z:cz, nx, nz, s };
       }
     }
     return slam;
@@ -548,6 +618,7 @@ export class Fighter {
     }
     this.danceY = dance;
     if(!this.missing.armR) P.armR.rotation.x = ar;
+    if(this.state === 'slam' && this.alive){ if(!this.missing.armR) P.armR.rotation.x = -3.0; if(!this.missing.armL) P.armL.rotation.x = -3.0; }
     if(this.state === 'block' && this.alive){ if(!this.missing.armR) P.armR.rotation.set(-1.9, 0, -0.5); if(!this.missing.armL) P.armL.rotation.set(-1.9, 0, 0.5); }
     else { if(!this.missing.armR) P.armR.rotation.z = 0; if(!this.missing.armL) P.armL.rotation.z = 0; }
     if(this.fleeT > 0 && this.alive && !this.missing.armL){ P.armL.rotation.x = -2.8; if(!this.missing.armR) P.armR.rotation.x = -2.8; }   // hands up, running

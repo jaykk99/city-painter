@@ -96,7 +96,7 @@ export function buildRoom(scene, L, quality = 1){
   for(const s of L.solids.concat(L.deco)){
     const m = new THREE.Mesh(geoBox, matFor(s.c, s.glow));
     m.position.set(s.x, s.y, s.z); m.scale.set(s.w, s.h, s.d);
-    m.castShadow = s.h > 0.3; m.receiveShadow = true; root.add(m);
+    m.castShadow = s.h > 0.3; m.receiveShadow = true; root.add(m); s.mesh = m;
   }
 
   // light: ambient + hemi + a few hanging lamps (point lights are capped for phones)

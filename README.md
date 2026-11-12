@@ -25,8 +25,21 @@ Like the real game, every bar starts **calm**: people drink, dance and play pool
 ## Gore physics
 Everyone is made of voxels and comes apart. **Every hit knocks real voxels out** — punches dent faces, bats cave in skulls, the crater's rim turns red, and a body part carved down far enough falls off or bursts. Blades sever arms, legs and heads (rigid debris that tumbles and bounces); sledgehammers, the anchor and dynamite pulp bodies into cubes; blood splats floors and walls; corpses ragdoll and can be mutilated; kicked bodies fly, slam walls and bowl people over.
 
-## 56 weapons
-Bottles (break into broken bottles), mugs, pool cues, stools, chairs, stool legs, bats, spiked bats, frying pan, knife, shiv, cleaver, machete, fire axe, sledgehammer, crowbar, pipe wrench, bike chain, guitar, mic stand, katana, cutlass, spear, pitchfork, shovel, weight plate, dumbbell, guard baton, anchor, brass knuckles, battle axe, war hammer, longsword, mace, flail, mead horn, goblet, nunchucks, bo staff, naginata, golf club, keyboard, monitor, fire extinguisher, office chair · revolver, crossbow, double barrel, flintlock, lever rifle, tommy gun · dynamite, throwing knives, kunai, throwing axes, cannonball. Anything can be thrown.
+## 57 weapons
+Bottles (break into broken bottles), mugs, pool cues, stools, chairs, stool legs, bats, spiked bats, frying pan, knife, shiv, cleaver, machete, fire axe, sledgehammer, crowbar, pipe wrench, bike chain, guitar, mic stand, katana, cutlass, spear, pitchfork, shovel, weight plate, dumbbell, guard baton, anchor, brass knuckles, battle axe, war hammer, longsword, mace, flail, mead horn, goblet, nunchucks, bo staff, naginata, golf club, keyboard, monitor, fire extinguisher, office chair · revolver, crossbow, double barrel, flintlock, lever rifle, tommy gun · dynamite, molotovs, throwing knives, kunai, throwing axes, cannonball. Anything can be thrown.
+
+## Blood
+Wounds keep dripping after the hit. Stumps spurt in pulses with the heartbeat, and anyone missing a limb bleeds out. Blood that hits a wall runs down it in streaks, pools spread under bodies, you leave red footprints after walking through one, and your weapon gets bloodier and drips.
+
+## Powers, fire and furniture
+- **Powers** (the fire bar fills from hits and kills): ⚡ **Smite** (X) calls lightning on whoever you're looking at, 💥 **Shockwave** (Z) blasts everyone around you off their feet, 🔥 **Berserk** (R) at a full bar
+- **Fire:** molotovs, the Mead Hall fire pit and the tavern hearth set people alight; they panic, spread it to anyone they touch, and end up charred
+- **Breakable furniture:** tables, crates and barrels smash when hit, shot, blown up or when a body is kicked through them. **Red powder kegs explode**
+- **Dash** (V / 💨): a quick dodge with a moment of invulnerability
+- **Bosses slam the ground** after a wind-up: jump, or hit them to interrupt
+- **Slow motion** on boss kills, decapitations and big combos
+- **Mutators** on the menu: Big Heads, Low Gravity, Exploding Kills, One Punch, Hardcore (each changes your score multiplier)
+- **Stars:** three goals per map
 
 ## Fighting
 - **Power hits:** hold attack to wind up — more damage, more knockback, cuts deeper, smashes through guards

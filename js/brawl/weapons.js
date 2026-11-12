@@ -75,6 +75,7 @@ export const WEAPONS = {
   tommy:      { name:'Tommy Gun',        kind:'gun', dmg:20, rate:0.09, knock:2,  sever:0.15, ammo:40, pellets:1, spread:0.05, range:45, model:M(0.3,0.06,0x5a3a1a,[0.08,0.12,0.6],0x333333) },
   // throwables
   dynamite:   { name:'Dynamite',         kind:'throw', dmg:0, rate:0.8, knock:0, sever:0, tdmg:90, explode:4.5, fuse:1.6, count:3, model:M(0.02,0.04,0xb02020,[0.05,0.2,0.05],0xd02a2a) },
+  molotov:    { name:'Molotov',          kind:'throw', dmg:0, rate:0.7, knock:0, sever:0, tdmg:10, shatter:true, fire:true, count:3, model:M(0.2,0.07,0x6a4a1a,[0.03,0.09,0.03],0xffa020,{ glass:true }) },
   tknives:    { name:'Throwing Knives',  kind:'throw', dmg:0, rate:0.35, knock:0, sever:0, tdmg:34, tsever:0.4, count:6, model:M(0.08,0.03,0x222222,[0.02,0.16,0.015],0xdedede) },
   kunai:      { name:'Kunai',            kind:'throw', dmg:0, rate:0.3, knock:0, sever:0, tdmg:36, tsever:0.45, count:8, model:M(0.08,0.025,0x222222,[0.025,0.18,0.012],0x9a9a9a) },
   throwaxe:   { name:'Throwing Axe',     kind:'throw', dmg:0, rate:0.6, knock:0, sever:0, tdmg:55, tsever:0.6, tknock:6, count:3, model:M(0.35,0.035,0x6b4423,[0.04,0.14,0.16],0xbfbfbf) },

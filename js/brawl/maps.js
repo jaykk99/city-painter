@@ -41,7 +41,7 @@ function backShelf(x, z, len, alongX){
 }
 function table(x, z, round = false, c = 0x6b4423){
   const k = kit();
-  k.solids.push(box(x, z, round ? 1 : 1.3, round ? 1 : 0.9, 0.78, c));
+  k.solids.push(box(x, z, round ? 1 : 1.3, round ? 1 : 0.9, 0.78, c, 0, { hp:70 }));
   k.pickups.push({ w:'bottle', x:x + 0.2, z, y:0.84 });
   k.pickups.push({ w:'chair', x:x - (round ? 0.95 : 1.1), z, y:0 });
   k.pickups.push({ w:'chair', x:x + (round ? 0.95 : 1.1), z:z + 0.1, y:0 });
@@ -62,8 +62,10 @@ function stools(x, z, n, alongX, gap = 0.9){
   }
   return k;
 }
-function crate(x, z, s = 1, c = 0x8b6b3a){ const k = kit(); k.solids.push(box(x, z, s, s, s, c)); return k; }
-function barrel(x, z, c = 0x6b4423){ const k = kit(); k.solids.push(box(x, z, 0.8, 0.8, 1.1, c, 0, { barrel:true })); return k; }
+function crate(x, z, s = 1, c = 0x8b6b3a){ const k = kit(); k.solids.push(box(x, z, s, s, s, c, 0, { hp:50 })); return k; }
+// red powder keg: shoot it, smash it or throw someone into it
+function tnt(x, z){ const k = kit(); k.solids.push(box(x, z, 0.75, 0.75, 1.0, 0xc01818, 0, { hp:12, explosive:true, glow:0x400000 })); return k; }
+function barrel(x, z, c = 0x6b4423){ const k = kit(); k.solids.push(box(x, z, 0.8, 0.8, 1.1, c, 0, { barrel:true, hp:50 })); return k; }
 
 // ---------- scenarios ----------
 // enemy outfit: skin, shirt, pants, hair, hat, beard, vest, shoe; boss = scale + hp multiplier
@@ -83,6 +85,7 @@ function bikerBar(){
   merge(L, poolTable(5, 2));
   merge(L, table(-6, 1)); merge(L, table(-2, 3, true)); merge(L, table(-7, 5, true));
   L.solids.push(box(10.6, 7.6, 1.2, 1.2, 1.9, 0xb02020, 0, { glow:0xff5030 }));   // jukebox
+  merge(L, tnt(11, 3.5)); merge(L, tnt(-11.2, -7.5)); L.pickups.push({ w:'molotov', x:-11, z:3, y:0 });
   L.pickups.push({ w:'bat', x:9.5, z:-8, y:0 }, { w:'crowbar', x:-10.5, z:7, y:0 }, { w:'pan', x:-1, z:-6, y:1.11 }, { w:'knife', x:-7, z:-6, y:1.11 },
     { w:'axe', x:11, z:-1, y:0 }, { w:'spikedbat', x:-11, z:-2, y:0 }, { w:'shotgun', x:-8.1, z:-6, y:1.11 }, { w:'dynamite', x:2, z:8, y:0 });
   return L;
@@ -102,6 +105,7 @@ function disco(){
   merge(L, barCounter(9.6, 0, 10, false, 0x30204a, 0x8040c0));
   merge(L, stools(8.6, 0, 8, false, 1.15));
   for(const [x, z] of [[-8, -4], [-8, 1], [-8, 6]]) merge(L, table(x, z, true, 0x40206a));
+  merge(L, tnt(-10.2, 10)); L.pickups.push({ w:'molotov', x:3.5, z:-9.6, y:0.6 });
   L.pickups.push({ w:'bat', x:-10, z:-9, y:0 }, { w:'knuckles', x:9.6, z:4, y:1.11 }, { w:'pan', x:9.6, z:-4, y:1.11 }, { w:'tommy', x:-10, z:9, y:0 }, { w:'tknives', x:10, z:9.5, y:0 });
   return L;
 }
@@ -127,6 +131,7 @@ function prison(){
   // weight benches in the middle + canteen tables
   for(const x of [-7, 7]){ L.solids.push(box(x, 0, 1.6, 0.6, 0.5, 0x333333)); L.pickups.push({ w:'weight', x:x - 1.3, z:0.6, y:0 }, { w:'weight', x:x + 1.3, z:-0.6, y:0 }, { w:'dumbbell', x:x, z:1.1, y:0 }); }
   L.solids.push(box(0, -3, 4, 1, 0.78, 0x777777)); L.solids.push(box(0, 3, 4, 1, 0.78, 0x777777));
+  merge(L, tnt(12.2, -5.2)); merge(L, tnt(-12.2, 5.2)); L.pickups.push({ w:'molotov', x:-12, z:-1, y:0 });
   L.pickups.push({ w:'pan', x:-1, z:-3, y:0.84 }, { w:'mug', x:1, z:3, y:0.84 }, { w:'knife', x:1.2, z:-3, y:0.84 }, { w:'baton', x:12, z:0, y:0 }, { w:'shovel', x:-12, z:0.5, y:0 }, { w:'revolver', x:0.4, z:3, y:0.84 });
   return L;
 }
@@ -145,6 +150,7 @@ function saloon(){
   L.solids.push(box(9.6, 7.6, 2.4, 1, 1.4, 0x2a1a0e));   // piano
   L.deco.push(box(9.6, 7.0, 2.2, 0.3, 0.06, 0xf0f0e0, 0.9));
   merge(L, barrel(-10.8, 8.6)); merge(L, barrel(-9.8, 8.8)); merge(L, crate(11, -8.6));
+  merge(L, tnt(11, 8.8)); merge(L, tnt(-11, -9)); L.pickups.push({ w:'molotov', x:5, z:9, y:0 });
   L.pickups.push({ w:'revolver', x:-9.6, z:-6, y:1.11 }, { w:'shotgun', x:11, z:-8.6, y:1 }, { w:'pitchfork', x:-11, z:6, y:0 }, { w:'shovel', x:11, z:3, y:0 },
     { w:'dynamite', x:-10, z:7.6, y:0 }, { w:'tknives', x:0, z:-9, y:0 }, { w:'axe', x:8, z:9, y:0 });
   return L;
@@ -163,6 +169,7 @@ function pirate(){
   for(const [x, z] of [[-6, -4], [-6, 3], [5, 3], [-1, 6]]) merge(L, table(x, z, false, 0x6a4a2a));
   for(const z of [-6, 0, 6]){ L.solids.push(box(-11, z, 1.6, 0.9, 0.9, 0x222222)); L.pickups.push({ w:'cannonball', x:-10, z:z + 1.2, y:0 }); }
   merge(L, barrel(10.8, 9.6)); merge(L, barrel(9.8, 9.8)); merge(L, barrel(10.8, 8.6)); merge(L, crate(-10.5, 9.8, 1.2));
+  merge(L, tnt(-8.6, 9.9)); merge(L, tnt(11, -4)); merge(L, tnt(3, -10)); L.pickups.push({ w:'molotov', x:-3, z:9.5, y:0 });
   L.pickups.push({ w:'cutlass', x:10, z:-8.6, y:1.11 }, { w:'flintlock', x:6, z:-8.6, y:1.11 }, { w:'spear', x:11, z:0, y:0 }, { w:'axe', x:-9, z:-9.5, y:0 }, { w:'knife', x:0.4, z:-1, y:0 });
   return L;
 }
@@ -178,6 +185,7 @@ function arena(){
   // the weapon racks: one of everything melee
   const rack = ['katana', 'axe', 'sledge', 'machete', 'spear', 'spikedbat', 'cleaver', 'cutlass', 'pitchfork', 'crowbar', 'bat', 'shovel', 'knuckles', 'wrench', 'chain', 'anchor', 'battleaxe', 'warhammer', 'longsword', 'flail', 'naginata', 'nunchucks'];
   rack.forEach((w, i) => { const a = (i / rack.length) * Math.PI * 2; L.pickups.push({ w, x:Math.cos(a) * 12.5, z:Math.sin(a) * 12.5, y:0 }); });
+  for(const [x, z] of [[-13.5, 0], [13.5, 0], [0, -13.5], [0, 13.5]]) merge(L, tnt(x, z)); L.pickups.push({ w:'molotov', x:-2, z:-2, y:0 }, { w:'molotov', x:5, z:0, y:0 });
   L.pickups.push({ w:'shotgun', x:2, z:2, y:0 }, { w:'revolver', x:-2, z:2, y:0 }, { w:'dynamite', x:0, z:-2.5, y:0 }, { w:'tknives', x:2, z:-2, y:0 });
   return L;
 }
@@ -211,6 +219,7 @@ function vikingHall(){
   L.solids.push(box(0, 0, 3, 1.6, 0.4, 0x3a3a3a, 0, { glow:0xff5010 }));                  // fire pit
   L.solids.push(box(12.6, 0, 1.2, 3, 1.4, 0x4a2a12)); L.deco.push(box(12.6, 0, 1.4, 1.4, 1.2, 0xc9a23a, 1.4));   // throne
   for(const z of [-7.4, 7.4]) for(const x of [-10, -3, 3, 10]) L.solids.push(box(x, z, 0.5, 0.5, 6, 0x4a2a12));    // pillars
+  L.fires = [[0, 0, 1.25]]; merge(L, tnt(-13, 3.5)); L.pickups.push({ w:'molotov', x:-13, z:-3, y:0 });
   L.pickups.push({ w:'battleaxe', x:11, z:-2.5, y:0 }, { w:'warhammer', x:11, z:2.5, y:0 }, { w:'throwaxe', x:-12.6, z:-6.5, y:0 }, { w:'longsword', x:-12.6, z:6.5, y:0 }, { w:'spear', x:6, z:0, y:0 }, { w:'mace', x:-6, z:0, y:0 });
   return L;
 }
@@ -226,6 +235,7 @@ function medievalTavern(){
   L.solids.push(box(0, -9.4, 4, 1, 2.2, 0x5a5048, 0, { glow:0xff6020 }));                 // hearth
   for(const [x, z] of [[-2, -4], [3, -4], [-2, 2], [3, 2], [7, -1]]) merge(L, table(x, z, false, 0x5a3a1e));
   merge(L, barrel(9.8, 8.6)); merge(L, barrel(8.8, 8.8)); merge(L, barrel(9.8, 7.6)); merge(L, crate(-9.6, 8.6));
+  L.fires = [[0, -8.5, 0.9]]; merge(L, tnt(-9.8, -9)); L.pickups.push({ w:'molotov', x:6, z:8.8, y:0 });
   L.pickups.push({ w:'longsword', x:9.5, z:-8.5, y:0 }, { w:'mace', x:-3, z:-9, y:0 }, { w:'flail', x:9.6, z:0, y:0 }, { w:'crossbow', x:-8.6, z:2, y:1.11 }, { w:'goblet', x:-8.6, z:-5, y:1.11 }, { w:'throwaxe', x:0, z:-8.6, y:0 });
   return L;
 }
@@ -242,6 +252,7 @@ function dojo(){
   for(const x of [-10.4, 10.4]) L.solids.push(box(x, 0, 0.5, 6, 1.6, 0x3a2414));
   L.solids.push(box(0, -10.4, 5, 0.8, 1.2, 0x3a2414)); L.deco.push(box(0, -10.6, 1, 0.3, 1.4, 0xd01818, 1.2));
   for(const z of [-2, 0, 2]){ L.pickups.push({ w:z ? 'bostaff' : 'naginata', x:-9.9, z, y:0 }, { w:z ? 'nunchucks' : 'katana', x:9.9, z, y:0 }); }
+  merge(L, tnt(-9.6, -9.8)); merge(L, tnt(9.6, 9.8));
   L.pickups.push({ w:'kunai', x:-1.5, z:-9.6, y:0 }, { w:'kunai', x:1.5, z:-9.6, y:0 }, { w:'katana', x:0, z:-10.4, y:1.2 });
   return L;
 }
@@ -257,6 +268,7 @@ function speakeasy(){
   merge(L, stools(-1, -6.4, 9, true, 1.15));
   L.solids.push(box(8.6, 7.6, 2.4, 1, 1.4, 0x111111));                                     // piano
   for(const [x, z] of [[-6, 0], [-6, 4.5], [0, 2], [5, -1], [5, 3]]) merge(L, table(x, z, true, 0x2a1a10));
+  merge(L, tnt(10.2, -8)); L.pickups.push({ w:'molotov', x:-10, z:2, y:0 }, { w:'molotov', x:1, z:-7.4, y:1.11 });
   L.pickups.push({ w:'tommy', x:-6, z:-7.4, y:1.11 }, { w:'revolver', x:3, z:-7.4, y:1.11 }, { w:'golfclub', x:-10, z:7.5, y:0 }, { w:'bat', x:10, z:-1, y:0 }, { w:'dynamite', x:-10.2, z:-3, y:0 });
   return L;
 }
@@ -271,6 +283,7 @@ function office(){
   L.solids.push(box(10.5, 6.5, 3, 1.6, 0.76, 0x3a2a1a));                                   // boss's desk
   L.solids.push(box(-11.6, 6, 1.2, 2.4, 1.0, 0xe0e0e0));                                    // snack table
   L.solids.push(box(-12.4, -8.6, 0.9, 0.9, 1.6, 0x3a6aa0, 0, { glow:0x6aa0ff }));            // water cooler
+  merge(L, tnt(12.2, 2)); L.pickups.push({ w:'molotov', x:-10, z:8.8, y:0 });
   L.pickups.push({ w:'extinguisher', x:12.4, z:-8.8, y:0 }, { w:'extinguisher', x:-12.4, z:8.8, y:0 }, { w:'golfclub', x:10.5, z:6.5, y:0.76 }, { w:'mug', x:-11.6, z:5.4, y:1 }, { w:'mug', x:-11.6, z:6.6, y:1 }, { w:'knife', x:-11.6, z:6, y:1 });
   return L;
 }
